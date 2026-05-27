@@ -1,0 +1,1350 @@
+From 2826ef18a27e1f9038e3050cd2104d8f1d6fd218 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Tue, 26 May 2026 12:51:05 +0100
+Subject: [PATCH] fix(main): simplify branding surfaces
+
+---
+ e2e/tests/branding.spec.ts                    |  75 +++
+ ui/src/components/AdminNavBar.tsx             |  33 +-
+ ui/src/components/BrandMark.tsx               |  34 ++
+ ui/src/components/NavBar.tsx                  |  13 +-
+ ui/src/components/RuntimeConfig.ts            |   4 +
+ ui/src/pages/404.tsx                          |  12 +-
+ ui/src/pages/_app.tsx                         |  23 +-
+ ui/src/pages/admin/confirm/[id].tsx           |  12 +-
+ .../pages/admin/organizations/delete/[id].tsx |  22 +-
+ ui/src/pages/admin/settings/index.tsx         |  23 +
+ ui/src/pages/login/index.tsx                  | 478 +++++++++---------
+ ui/src/pages/resetpw/[id].tsx                 |  26 +-
+ ui/src/pages/resetpw/index.tsx                |  11 +-
+ ui/src/pages/setpw/[id].tsx                   |  54 +-
+ ui/src/styles/AdminNavBar.css                 |  12 +
+ ui/src/styles/Login.css                       |   7 +
+ ui/src/styles/NavBar.css                      |   6 +
+ ui/src/types/Organization.ts                  |   6 +
+ ui/src/util/Branding.ts                       |   5 +
+ 19 files changed, 586 insertions(+), 270 deletions(-)
+ create mode 100644 e2e/tests/branding.spec.ts
+ create mode 100644 ui/src/components/BrandMark.tsx
+ create mode 100644 ui/src/util/Branding.ts
+
+diff --git a/e2e/tests/branding.spec.ts b/e2e/tests/branding.spec.ts
+new file mode 100644
+index 00000000..2d856e74
+--- /dev/null
++++ b/e2e/tests/branding.spec.ts
+@@ -0,0 +1,75 @@
++import { test, expect } from "@playwright/test";
++import { login } from "../util/helper";
++
++const TEST_BRANDING = {
++  websiteName: "Acme Desk",
++  customLogoUrl: "https://example.com/logo.svg",
++};
++
++test.beforeEach(async ({ page }) => {
++  await page.addInitScript(() => {
++    window.localStorage.setItem("mfaEncouragementDismissed", "1");
++  });
++
++  await login(page, "admin@seatsurfing.local", "Sea!surf1ng");
++  await expect(page).toHaveURL(/search\/$/);
++  await expect(
++    page.getByRole("link", { name: "Seatsurfing" }).first(),
++  ).toBeVisible();
++  await page.getByRole("link", { name: "Administration" }).click();
++  await expect(page).toHaveURL(/admin\/dashboard\/$/);
++});
++
++test("branding settings apply to the login page", async ({ page }) => {
++  await page.getByRole("link", { name: "Settings" }).click();
++  await expect(page).toHaveURL(/admin\/settings\/$/);
++
++  const originalWebsiteName = await page.getByLabel("Website name").inputValue();
++  const originalLogoUrl = await page.getByLabel("Custom logo URL").inputValue();
++
++  try {
++    await page.getByLabel("Website name").fill(TEST_BRANDING.websiteName);
++    await page.getByLabel("Custom logo URL").fill(TEST_BRANDING.customLogoUrl);
++    await page.getByRole("button", { name: "Save" }).click();
++    await expect(page.getByText("Record saved.")).toBeVisible();
++
++    await page.getByRole("button", { name: "Logout" }).click();
++    await expect(page).toHaveURL(/login\/$/);
++    await expect(page).toHaveTitle(TEST_BRANDING.websiteName);
++    await expect(
++      page.getByRole("heading", {
++        level: 3,
++        name: TEST_BRANDING.websiteName,
++      }),
++    ).toBeVisible();
++    await expect(page.locator("img.logo")).toHaveCount(1);
++
++    const iconHrefs = await page
++      .locator("link[rel='icon']")
++      .evaluateAll((elements) =>
++        elements.map((element) => element.getAttribute("href") || ""),
++      );
++    expect(iconHrefs.some((href) => href.includes("logo.svg"))).toBe(true);
++  } finally {
++    try {
++      if (page.url().includes("/ui/login/")) {
++        await login(page, "admin@seatsurfing.local", "Sea!surf1ng");
++        await expect(page).toHaveURL(/search\/$/);
++        await expect(
++          page.getByRole("link", { name: TEST_BRANDING.websiteName }).first(),
++        ).toBeVisible();
++        await page.getByRole("link", { name: "Administration" }).click();
++        await expect(page).toHaveURL(/admin\/dashboard\/$/);
++      }
++      await page.getByRole("link", { name: "Settings" }).click();
++      await expect(page).toHaveURL(/admin\/settings\/$/);
++      await page.getByLabel("Website name").fill(originalWebsiteName);
++      await page.getByLabel("Custom logo URL").fill(originalLogoUrl);
++      await page.getByRole("button", { name: "Save" }).click();
++      await expect(page.getByText("Record saved.")).toBeVisible();
++      await page.getByRole("button", { name: "Logout" }).click();
++    } catch {
++      // Best effort restore; avoid masking the original failure.
++    }
++  }
++});
+diff --git a/ui/src/components/AdminNavBar.tsx b/ui/src/components/AdminNavBar.tsx
+index f330ac87..044a3a60 100644
+--- a/ui/src/components/AdminNavBar.tsx
++++ b/ui/src/components/AdminNavBar.tsx
+@@ -5,6 +5,7 @@ import Link from "next/link";
+ import { TranslationFunc, withTranslation } from "./withTranslation";
+ import withReadyRouter from "./withReadyRouter";
+ import RuntimeConfig from "./RuntimeConfig";
++import BrandMark from "./BrandMark";
+ 
+ interface State {
+   search: string;
+@@ -62,16 +63,28 @@ class AdminNavBar extends React.Component<Props, State> {
+           className="navbar-brand col-1 col-md-3 col-lg-2 me-0 px-3"
+           href="/admin/dashboard"
+         >
+-          <img
+-            src="/ui/seatsurfing_white.svg"
+-            alt="Seatsurfing"
+-            className="d-none d-md-block"
+-          />
+-          <img
+-            src="/ui/seatsurfing_white_logo.svg"
+-            alt="Seatsurfing"
+-            className="d-block d-md-none"
+-          />
++          {RuntimeConfig.INFOS.customLogoUrl ? (
++            <>
++              <img
++                src={RuntimeConfig.INFOS.customLogoUrl}
++                alt="Seatsurfing"
++                className="d-none d-md-block admin-navbar-brand-image"
++              />
++              <img
++                src={RuntimeConfig.INFOS.customLogoUrl}
++                alt="Seatsurfing"
++                className="d-block d-md-none admin-navbar-brand-image"
++              />
++            </>
++          ) : (
++            <BrandMark
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing_white.svg"
++              alt="Seatsurfing"
++              textClassName="navbar-brand-text"
++              textTag="span"
++            />
++          )}
+         </Link>
+         <Form onSubmit={this.submitSearchForm} className="w-100">
+           <Form.Control
+diff --git a/ui/src/components/BrandMark.tsx b/ui/src/components/BrandMark.tsx
+new file mode 100644
+index 00000000..3c481b09
+--- /dev/null
++++ b/ui/src/components/BrandMark.tsx
+@@ -0,0 +1,34 @@
++import React from "react";
++
++interface Props {
++  alt: string;
++  defaultLogoUrl: string;
++  logoUrl?: string | null;
++  brandText?: string | null;
++  imageClassName?: string;
++  textClassName?: string;
++  textTag?: React.ElementType;
++}
++
++export default class BrandMark extends React.Component<Props> {
++  render() {
++    const {
++      alt,
++      defaultLogoUrl,
++      logoUrl,
++      brandText,
++      imageClassName,
++      textClassName,
++      textTag,
++    } = this.props;
++    const text = (brandText ?? "").trim();
++    if (logoUrl) {
++      return <img src={logoUrl} alt={alt} className={imageClassName} />;
++    }
++    if (text) {
++      const Tag = textTag ?? "span";
++      return <Tag className={textClassName}>{text}</Tag>;
++    }
++    return <img src={defaultLogoUrl} alt={alt} className={imageClassName} />;
++  }
++}
+diff --git a/ui/src/components/NavBar.tsx b/ui/src/components/NavBar.tsx
+index 5dc67394..1950af3a 100644
+--- a/ui/src/components/NavBar.tsx
++++ b/ui/src/components/NavBar.tsx
+@@ -26,6 +26,7 @@ import MergeRequest from "@/types/MergeRequest";
+ import User from "@/types/User";
+ import Ajax from "@/util/Ajax";
+ import LanguageSelector from "./LanguageSelector";
++import BrandMark from "./BrandMark";
+ 
+ interface State {
+   showMergeInit: boolean;
+@@ -239,8 +240,6 @@ class NavBar extends React.Component<Props, State> {
+       );
+     }
+ 
+-    const logoUrl = RuntimeConfig.INFOS.customLogoUrl || "/ui/seatsurfing.svg";
+-
+     return (
+       <>
+         <Navbar
+@@ -251,7 +250,15 @@ class NavBar extends React.Component<Props, State> {
+         >
+           <Container fluid={true}>
+             <Navbar.Brand as={NavLink} to="/search">
+-              <img src={logoUrl} alt="Seatsurfing" />
++              <BrandMark
++                logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++                brandText={RuntimeConfig.INFOS.websiteName}
++                defaultLogoUrl="/ui/seatsurfing.svg"
++                alt="Seatsurfing"
++                imageClassName="navbar-brand-image"
++                textClassName="navbar-brand-text"
++                textTag="span"
++              />
+             </Navbar.Brand>
+             {collapsable}
+           </Container>
+diff --git a/ui/src/components/RuntimeConfig.ts b/ui/src/components/RuntimeConfig.ts
+index 7dda429c..772e8662 100644
+--- a/ui/src/components/RuntimeConfig.ts
++++ b/ui/src/components/RuntimeConfig.ts
+@@ -18,6 +18,7 @@ interface RuntimeUserInfos {
+   noAdminRestrictions: boolean;
+   showNames: boolean;
+   customLogoUrl: string;
++  websiteName: string;
+   defaultTimezone: string;
+   disableBuddies: boolean;
+   maxHoursPartiallyBooked: number;
+@@ -73,6 +74,7 @@ export default class RuntimeConfig {
+       noAdminRestrictions: false,
+       disableBuddies: false,
+       customLogoUrl: "",
++      websiteName: "",
+       maxHoursPartiallyBooked: 0,
+       maxHoursPartiallyBookedEnabled: false,
+       showNames: false,
+@@ -174,6 +176,8 @@ export default class RuntimeConfig {
+             RuntimeConfig.INFOS.disableBuddies = s.value === "1";
+           if (s.name === "custom_logo_url")
+             RuntimeConfig.INFOS.customLogoUrl = s.value;
++          if (s.name === "website_name")
++            RuntimeConfig.INFOS.websiteName = s.value;
+           if (s.name === "default_timezone")
+             RuntimeConfig.INFOS.defaultTimezone = s.value;
+           if (s.name === "feature_recurring_bookings")
+diff --git a/ui/src/pages/404.tsx b/ui/src/pages/404.tsx
+index 43544ea3..aa7cf74b 100644
+--- a/ui/src/pages/404.tsx
++++ b/ui/src/pages/404.tsx
+@@ -1,5 +1,7 @@
+ import React from "react";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
++import RuntimeConfig from "@/components/RuntimeConfig";
+ 
+ interface Props {
+   t: TranslationFunc;
+@@ -14,7 +16,15 @@ class Error404 extends React.Component<Props> {
+     return (
+       <div className="container-center">
+         <div className="container-center-inner">
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++            brandText={RuntimeConfig.INFOS.websiteName}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt="Seatsurfing"
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           <p>
+             <a href="/ui/">{this.props.t("error404")}</a>
+           </p>
+diff --git a/ui/src/pages/_app.tsx b/ui/src/pages/_app.tsx
+index 0073e012..55068dd5 100644
+--- a/ui/src/pages/_app.tsx
++++ b/ui/src/pages/_app.tsx
+@@ -27,6 +27,7 @@ import MfaEncouragementModal from "@/components/MfaEncouragementModal";
+ import SessionExpiredModal from "@/components/SessionExpiredModal";
+ import ServerErrorModal from "@/components/ServerErrorModal";
+ import NotFoundModal from "@/components/NotFoundModal";
++import { getFaviconHref } from "@/util/Branding";
+ import User from "@/types/User";
+ import Router from "next/router";
+ 
+@@ -289,10 +290,17 @@ class App extends React.Component<Props, State> {
+     const { Component, pageProps } = this.props;
+     Formatting.Language = RuntimeConfig.getLanguage();
+     Formatting.t = this.props.t;
++    const websiteName = RuntimeConfig.INFOS.websiteName || "Seatsurfing";
++    const faviconUrl = getFaviconHref(RuntimeConfig.INFOS.customLogoUrl);
++    const currentPath =
++      typeof window !== "undefined" ? window.location.pathname : "";
++    const isAuthPage =
++      currentPath.includes("/login") ||
++      currentPath.includes("/resetpw") ||
++      currentPath.includes("/setpw");
+     return (
+       <>
+         <Head>
+-          <link rel="icon" href="/ui/favicon.ico" />
+           <meta name="viewport" content="width=device-width, initial-scale=1" />
+           <meta name="theme-color" content="#343a40" />
+           <link rel="manifest" href="/ui/manifest.json" />
+@@ -301,10 +309,15 @@ class App extends React.Component<Props, State> {
+             name="apple-mobile-web-app-status-bar-style"
+             content="default"
+           />
+-          <link rel="shortcut icon" href="/ui/favicon-192.png" />
+-          <link rel="apple-touch-icon" href="/ui/favicon-192.png" />
+-          <link rel="apple-touch-startup-image" href="/ui/favicon-1024.png" />
+-          <title>Seatsurfing</title>
++          {!isAuthPage && (
++            <>
++              <link key="favicon" rel="icon" href={faviconUrl} />
++              <link key="shortcut-icon" rel="shortcut icon" href={faviconUrl} />
++              <link rel="apple-touch-icon" href="/ui/favicon-192.png" />
++              <link rel="apple-touch-startup-image" href="/ui/favicon-1024.png" />
++              <title key="title">{websiteName}</title>
++            </>
++          )}
+         </Head>
+         {this.state.showTotpEnforcement && (
+           <TotpSetupModal
+diff --git a/ui/src/pages/admin/confirm/[id].tsx b/ui/src/pages/admin/confirm/[id].tsx
+index 140f3f53..0aebc256 100644
+--- a/ui/src/pages/admin/confirm/[id].tsx
++++ b/ui/src/pages/admin/confirm/[id].tsx
+@@ -4,6 +4,8 @@ import { NextRouter } from "next/router";
+ import Link from "next/link";
+ import withReadyRouter from "@/components/withReadyRouter";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
++import RuntimeConfig from "@/components/RuntimeConfig";
+ import Ajax from "@/util/Ajax";
+ 
+ interface State {
+@@ -88,7 +90,15 @@ class ConfirmSignup extends React.Component<Props, State> {
+     return (
+       <div className="container-center">
+         <div className="container-center-inner">
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++            brandText={RuntimeConfig.INFOS.websiteName}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt="Seatsurfing"
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           {loading}
+           {result}
+         </div>
+diff --git a/ui/src/pages/admin/organizations/delete/[id].tsx b/ui/src/pages/admin/organizations/delete/[id].tsx
+index 3f3a5fe8..95b11c0a 100644
+--- a/ui/src/pages/admin/organizations/delete/[id].tsx
++++ b/ui/src/pages/admin/organizations/delete/[id].tsx
+@@ -3,6 +3,8 @@ import { Button, Form } from "react-bootstrap";
+ import { NextRouter } from "next/router";
+ import withReadyRouter from "@/components/withReadyRouter";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
++import RuntimeConfig from "@/components/RuntimeConfig";
+ import Ajax from "@/util/Ajax";
+ 
+ interface State {
+@@ -57,7 +59,15 @@ class CompleteOrgDeletion extends React.Component<Props, State> {
+       return (
+         <div className="container-center">
+           <div className="container-center-inner">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++            <BrandMark
++              logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing.svg"
++              alt="Seatsurfing"
++              imageClassName="logo"
++              textClassName="brand-text"
++              textTag="h3"
++            />
+             <p>{this.props.t("confirmDeleteOrgSuccess")}</p>
+           </div>
+         </div>
+@@ -70,7 +80,15 @@ class CompleteOrgDeletion extends React.Component<Props, State> {
+           className="container-center-inner"
+           onSubmit={this.onDeleteOrgSubmit}
+         >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++            brandText={RuntimeConfig.INFOS.websiteName}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt="Seatsurfing"
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           <Form.Group>
+             <Form.Control
+               type="text"
+diff --git a/ui/src/pages/admin/settings/index.tsx b/ui/src/pages/admin/settings/index.tsx
+index d77dd2f4..4fee231b 100644
+--- a/ui/src/pages/admin/settings/index.tsx
++++ b/ui/src/pages/admin/settings/index.tsx
+@@ -46,6 +46,7 @@ interface State {
+   defaultTimezone: string;
+   confluenceServerSharedSecret: string;
+   customLogoUrl: string;
++  websiteName: string;
+   maxBookingsPerUser: number;
+   maxConcurrentBookingsPerUser: number;
+   maxDaysInAdvance: number;
+@@ -107,6 +108,7 @@ class Settings extends React.Component<Props, State> {
+       defaultTimezone: "",
+       confluenceServerSharedSecret: "",
+       customLogoUrl: "",
++      websiteName: "",
+       maxBookingsPerUser: 0,
+       maxConcurrentBookingsPerUser: 0,
+       maxBookingDuration: 0,
+@@ -199,6 +201,7 @@ class Settings extends React.Component<Props, State> {
+         if (s.name === "confluence_server_shared_secret")
+           state.confluenceServerSharedSecret = s.value;
+         if (s.name === "custom_logo_url") state.customLogoUrl = s.value;
++        if (s.name === "website_name") state.websiteName = s.value;
+         if (s.name === "max_bookings_per_user")
+           state.maxBookingsPerUser = window.parseInt(s.value);
+         if (s.name === "max_concurrent_bookings_per_user")
+@@ -313,6 +316,7 @@ class Settings extends React.Component<Props, State> {
+         this.state.confluenceServerSharedSecret,
+       ),
+       new OrgSettings("custom_logo_url", this.state.customLogoUrl),
++      new OrgSettings("website_name", this.state.websiteName),
+       new OrgSettings(
+         "daily_basis_booking",
+         this.state.dailyBasisBooking ? "1" : "0",
+@@ -806,6 +810,25 @@ class Settings extends React.Component<Props, State> {
+               </Form.Text>
+             </Col>
+           </Form.Group>
++          <Form.Group as={Row}>
++            <Form.Label column sm="2" htmlFor="input-websiteName">
++              {this.props.t("websiteName")}
++            </Form.Label>
++            <Col sm="4">
++              <Form.Control
++                id="input-websiteName"
++                type="text"
++                value={this.state.websiteName}
++                onChange={(e: any) =>
++                  this.setState({ websiteName: e.target.value })
++                }
++                maxLength={256}
++              />
++              <Form.Text className="text-muted">
++                {this.props.t("websiteNameHint")}
++              </Form.Text>
++            </Col>
++          </Form.Group>
+           <Form.Group as={Row}>
+             <Form.Label column sm="2" htmlFor="input-maxBookingsPerUser">
+               {this.props.t("maxBookingsPerUser")}
+diff --git a/ui/src/pages/login/index.tsx b/ui/src/pages/login/index.tsx
+index b4af8fba..83f00a43 100644
+--- a/ui/src/pages/login/index.tsx
++++ b/ui/src/pages/login/index.tsx
+@@ -2,8 +2,10 @@ import React from "react";
+ import { Form, Button, InputGroup } from "react-bootstrap";
+ import { NextRouter } from "next/router";
+ import Link from "next/link";
++import Head from "next/head";
+ import withReadyRouter from "@/components/withReadyRouter";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
+ import AuthProvider from "@/types/AuthProvider";
+ import Organization from "@/types/Organization";
+ import Ajax from "@/util/Ajax";
+@@ -22,6 +24,7 @@ import Passkey, {
+   serializeAssertionResponse,
+   PasskeyChallengeResponse,
+ } from "@/types/Passkey";
++import { getFaviconHref } from "@/util/Branding";
+ 
+ interface State {
+   email: string;
+@@ -410,15 +413,25 @@ class Login extends React.Component<Props, State> {
+     }
+ 
+     if (this.state.loading) {
+-      return (
+-        <>
+-          <Loading />
+-        </>
+-      );
++      return <Loading />;
+     }
+ 
+     const securityFeaturesEnabled =
+       this.org?.featureSecurityFeatures ?? true;
++    const websiteName =
++      this.org?.websiteName || this.org?.name || "Seatsurfing";
++    const faviconUrl = getFaviconHref(this.org?.logoUrl);
++    const renderBrand = () => (
++      <BrandMark
++        logoUrl={this.org?.logoUrl}
++        brandText={websiteName}
++        defaultLogoUrl="/ui/seatsurfing.svg"
++        alt={websiteName || "Seatsurfing"}
++        imageClassName="logo"
++        textClassName="brand-text"
++        textTag="h3"
++      />
++    );
+ 
+     const copyrightFooter = (
+       <div className="copyright-footer">
+@@ -434,12 +447,13 @@ class Login extends React.Component<Props, State> {
+       </div>
+     );
+ 
++    let body: React.ReactElement;
++
+     if (this.state.domainNotFound) {
+-      return (
++      body = (
+         <div className="container-signin">
+           <Form className="form-signin">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-            <h3>Domain not found.</h3>
++            {renderBrand()}
+             <p>
+               Please make sure your domain name is set up correctly in
+               Seatsurfing&#39;s settings.
+@@ -448,9 +462,7 @@ class Login extends React.Component<Props, State> {
+           </Form>
+         </div>
+       );
+-    }
+-
+-    if (this.state.providers != null && this.state.providers.length > 0) {
++    } else if (this.state.providers != null && this.state.providers.length > 0) {
+       const buttons = this.state.providers.map((provider) =>
+         this.renderAuthProviderButton(provider),
+       );
+@@ -458,7 +470,7 @@ class Login extends React.Component<Props, State> {
+         <p>
+           {this.props.t("signinAsAt", {
+             user: this.state.email,
+-            org: this.org?.name,
++            org: websiteName,
+           })}
+         </p>
+       );
+@@ -468,11 +480,10 @@ class Login extends React.Component<Props, State> {
+       if (buttons.length === 0) {
+         providerSelection = <p>{this.props.t("errorNoAuthProviders")}</p>;
+       }
+-      return (
++      body = (
+         <div className="container-signin">
+           <Form className="form-signin">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-            <h3>{this.org?.name}</h3>
++            {renderBrand()}
+             {providerSelection}
+             {buttons}
+             <p
+@@ -490,14 +501,11 @@ class Login extends React.Component<Props, State> {
+           {copyrightFooter}
+         </div>
+       );
+-    }
+-
+-    if (this.state.disablePasswordLogin) {
+-      return (
++    } else if (this.state.disablePasswordLogin) {
++      body = (
+         <div className="container-signin">
+           <Form className="form-signin">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-            <h3>{this.org?.name}</h3>
++            {renderBrand()}
+             <p>
+               Password Login is disabled, but no Auth Providers are configured.
+               Please contact your administrator.
+@@ -505,246 +513,250 @@ class Login extends React.Component<Props, State> {
+           </Form>
+         </div>
+       );
+-    }
+-
+-    return (
+-      <div className="container-signin">
+-        {/* ------------------ */}
+-        {/* Passkey 2FA prompt */}
+-        {/* ------------------ */}
+-
+-        {/* Shown when password verified but passkey required */}
+-        <Form
+-          className="form-signin"
+-          name="passkey-2fa"
+-          hidden={
+-            !this.state.requirePasskey ||
+-            this.state.requirePasswordUpdate ||
+-            !securityFeaturesEnabled
+-          }
+-        >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-          <h3>{this.org?.name}</h3>
+-          <p>{this.props.t("passkeyRequired")}</p>
+-          <Button
+-            variant="link"
+-            onClick={() =>
+-              this.performPasskeyAssertion(
+-                this.state.passkeyStateId,
+-                this.state.passkeyOptions,
+-              )
++    } else {
++      body = (
++        <div className="container-signin">
++          {/* ------------------ */}
++          {/* Passkey 2FA prompt */}
++          {/* ------------------ */}
++
++          {/* Shown when password verified but passkey required */}
++          <Form
++            className="form-signin"
++            name="passkey-2fa"
++            hidden={
++              !this.state.requirePasskey ||
++              this.state.requirePasswordUpdate ||
++              !securityFeaturesEnabled
+             }
+-            disabled={this.state.inPasskeyLogin}
+           >
+-            {this.props.t("signInWithPasskey")}
+-          </Button>
+-          {this.state.allowTotpFallback && (
++            {renderBrand()}
++            <p>{this.props.t("passkeyRequired")}</p>
+             <Button
+               variant="link"
+               onClick={() =>
+-                this.setState({ requirePasskey: false, requireTotp: true })
++                this.performPasskeyAssertion(
++                  this.state.passkeyStateId,
++                  this.state.passkeyOptions,
++                )
+               }
+               disabled={this.state.inPasskeyLogin}
+             >
+-              {this.props.t("useTotpInstead")}
++              {this.props.t("signInWithPasskey")}
+             </Button>
+-          )}
+-          {this.state.invalid && (
+-            <p className="text-danger">{this.props.t("errorUnknown")}</p>
+-          )}
+-        </Form>
+-        <Form
+-          className="form-signin"
+-          onSubmit={this.onPasswordSubmit}
+-          name="totp-login"
+-          hidden={!this.state.requireTotp}
+-        >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-          <h3>{this.org?.name}</h3>
+-          <p>{this.props.t("enterTotpCode")}</p>
+-          <Form.Group>
+-            <InputGroup>
+-              <TotpInput
+-                value={this.state.code}
+-                onChange={(value: string) =>
+-                  this.setState({ code: value, invalid: false })
+-                }
+-                onComplete={(value: string) => {
+-                  this.setState({ code: value, invalid: false }, () => {
+-                    this.onPasswordSubmit(new Event("submit") as any);
+-                  });
+-                }}
+-                disabled={this.state.inPasswordSubmit}
+-                invalid={this.state.invalid}
+-                hidden={!this.state.requireTotp}
+-                required={true}
+-              />
+-            </InputGroup>
+-          </Form.Group>
+-        </Form>
+-
+-        {/* --------------- */}
+-        {/* Password update */}
+-        {/* --------------- */}
+-
+-        <Form
+-          className="form-signin"
+-          onSubmit={this.onNewPasswordSubmit}
+-          name="password-update"
+-          hidden={
+-            this.state.requireTotp ||
+-            this.state.requirePasskey ||
+-            !this.state.requirePasswordUpdate
+-          }
+-        >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-          <h3>{this.org?.name}</h3>
+-          <p>{this.props.t("passwordUpdateInfo")}</p>
+-          <Form.Group style={{ marginBottom: "5px" }}>
+-            <Form.Control
+-              type="email"
+-              readOnly={true}
+-              value={this.state.email}
+-            />
+-          </Form.Group>
+-          <Form.Group style={{ marginBottom: "5px" }}>
+-            <InputGroup>
+-              <Form.Control
+-                type="password"
+-                readOnly={this.state.inPasswordSubmit}
+-                placeholder={this.props.t("newPasswordPlaceholder")}
+-                value={this.state.newPassword}
+-                onChange={(e: any) =>
+-                  this.setState({
+-                    newPassword: e.target.value,
+-                  })
+-                }
+-                minLength={Validation.PASSWORD_MIN_LENGTH}
+-                maxLength={Validation.PASSWORD_MAX_LENGTH}
+-                pattern={Validation.PASSWORD_PATTERN}
+-                required={true}
+-                isInvalid={this.state.invalid}
+-                autoFocus={true}
+-                title={this.props.t("passwordRequirements")}
+-              />
+-              <Button variant="primary" type="submit">
+-                {this.state.inPasswordSubmit ? (
+-                  <Loading showText={false} paddingTop={false} />
+-                ) : (
+-                  <div className="feather-btn">&#10148;</div>
+-                )}
+-              </Button>
+-            </InputGroup>
+-            <p className="margin-top-50">
++            {this.state.allowTotpFallback && (
+               <Button
+                 variant="link"
+-                className="p-0"
+                 onClick={() =>
+-                  this.setState({
+-                    requirePasswordUpdate: false,
+-                    email: "",
+-                    password: "",
+-                  })
++                  this.setState({ requirePasskey: false, requireTotp: true })
+                 }
++                disabled={this.state.inPasskeyLogin}
+               >
+-                {this.props.t("back")}
++                {this.props.t("useTotpInstead")}
+               </Button>
+-            </p>
+-          </Form.Group>
+-        </Form>
+-
+-        {/* -------------- */}
+-        {/* Standard login */}
+-        {/* -------------- */}
+-
+-        <Form
+-          className="form-signin"
+-          onSubmit={this.onPasswordSubmit}
+-          name="password-login"
+-          hidden={
+-            this.state.requireTotp ||
+-            this.state.requirePasskey ||
+-            this.state.requirePasswordUpdate
+-          }
+-        >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
+-          <h3>{this.org?.name}</h3>
+-          <Form.Group style={{ marginBottom: "5px" }}>
+-            <Form.Control
+-              type="email"
+-              readOnly={this.state.inPasswordSubmit}
+-              placeholder={this.props.t("emailPlaceholder")}
+-              value={this.state.email}
+-              onChange={(e: any) =>
+-                this.setState({
+-                  email: e.target.value,
+-                  invalid: false,
+-                  passkeyLoginFailed: false,
+-                })
+-              }
+-              required={true}
+-              isInvalid={this.state.invalid}
+-              autoFocus={true}
+-            />
+-          </Form.Group>
+-          <Form.Group>
+-            <InputGroup>
++            )}
++            {this.state.invalid && (
++              <p className="text-danger">{this.props.t("errorUnknown")}</p>
++            )}
++          </Form>
++          <Form
++            className="form-signin"
++            onSubmit={this.onPasswordSubmit}
++            name="totp-login"
++            hidden={!this.state.requireTotp}
++          >
++            {renderBrand()}
++            <p>{this.props.t("enterTotpCode")}</p>
++            <Form.Group>
++              <InputGroup>
++                <TotpInput
++                  value={this.state.code}
++                  onChange={(value: string) =>
++                    this.setState({ code: value, invalid: false })
++                  }
++                  onComplete={(value: string) => {
++                    this.setState({ code: value, invalid: false }, () => {
++                      this.onPasswordSubmit(new Event("submit") as any);
++                    });
++                  }}
++                  disabled={this.state.inPasswordSubmit}
++                  invalid={this.state.invalid}
++                  hidden={!this.state.requireTotp}
++                  required={true}
++                />
++              </InputGroup>
++            </Form.Group>
++          </Form>
++
++          {/* --------------- */}
++          {/* Password update */}
++          {/* --------------- */}
++
++          <Form
++            className="form-signin"
++            onSubmit={this.onNewPasswordSubmit}
++            name="password-update"
++            hidden={
++              this.state.requireTotp ||
++              this.state.requirePasskey ||
++              !this.state.requirePasswordUpdate
++            }
++          >
++            {renderBrand()}
++            <p>{this.props.t("passwordUpdateInfo")}</p>
++            <Form.Group style={{ marginBottom: "5px" }}>
++              <Form.Control
++                type="email"
++                readOnly={true}
++                value={this.state.email}
++              />
++            </Form.Group>
++            <Form.Group style={{ marginBottom: "5px" }}>
++              <InputGroup>
++                <Form.Control
++                  type="password"
++                  readOnly={this.state.inPasswordSubmit}
++                  placeholder={this.props.t("newPasswordPlaceholder")}
++                  value={this.state.newPassword}
++                  onChange={(e: any) =>
++                    this.setState({
++                      newPassword: e.target.value,
++                    })
++                  }
++                  minLength={Validation.PASSWORD_MIN_LENGTH}
++                  maxLength={Validation.PASSWORD_MAX_LENGTH}
++                  pattern={Validation.PASSWORD_PATTERN}
++                  required={true}
++                  isInvalid={this.state.invalid}
++                  autoFocus={true}
++                  title={this.props.t("passwordRequirements")}
++                />
++                <Button variant="primary" type="submit">
++                  {this.state.inPasswordSubmit ? (
++                    <Loading showText={false} paddingTop={false} />
++                  ) : (
++                    <div className="feather-btn">&#10148;</div>
++                  )}
++                </Button>
++              </InputGroup>
++              <p className="margin-top-50">
++                <Button
++                  variant="link"
++                  className="p-0"
++                  onClick={() =>
++                    this.setState({
++                      requirePasswordUpdate: false,
++                      email: "",
++                      password: "",
++                    })
++                  }
++                >
++                  {this.props.t("back")}
++                </Button>
++              </p>
++            </Form.Group>
++          </Form>
++
++          {/* -------------- */}
++          {/* Standard login */}
++          {/* -------------- */}
++
++          <Form
++            className="form-signin"
++            onSubmit={this.onPasswordSubmit}
++            name="password-login"
++            hidden={
++              this.state.requireTotp ||
++              this.state.requirePasskey ||
++              this.state.requirePasswordUpdate
++            }
++          >
++            {renderBrand()}
++            <Form.Group style={{ marginBottom: "5px" }}>
+               <Form.Control
+-                type="password"
++                type="email"
+                 readOnly={this.state.inPasswordSubmit}
+-                placeholder={this.props.t("password")}
+-                value={this.state.password}
++                placeholder={this.props.t("emailPlaceholder")}
++                value={this.state.email}
+                 onChange={(e: any) =>
+                   this.setState({
+-                    password: e.target.value,
++                    email: e.target.value,
+                     invalid: false,
+                     passkeyLoginFailed: false,
+                   })
+                 }
+                 required={true}
+                 isInvalid={this.state.invalid}
+-                minLength={8}
++                autoFocus={true}
+               />
+-              <Button variant="primary" type="submit">
+-                {this.state.inPasswordSubmit ? (
+-                  <Loading showText={false} paddingTop={false} />
+-                ) : (
+-                  <div className="feather-btn">&#10148;</div>
++            </Form.Group>
++            <Form.Group>
++              <InputGroup>
++                <Form.Control
++                  type="password"
++                  readOnly={this.state.inPasswordSubmit}
++                  placeholder={this.props.t("password")}
++                  value={this.state.password}
++                  onChange={(e: any) =>
++                    this.setState({
++                      password: e.target.value,
++                      invalid: false,
++                      passkeyLoginFailed: false,
++                    })
++                  }
++                  required={true}
++                  isInvalid={this.state.invalid}
++                  minLength={8}
++                />
++                <Button variant="primary" type="submit">
++                  {this.state.inPasswordSubmit ? (
++                    <Loading showText={false} paddingTop={false} />
++                  ) : (
++                    <div className="feather-btn">&#10148;</div>
++                  )}
++                </Button>
++              </InputGroup>
++            </Form.Group>
++            <Form.Control.Feedback type="invalid">
++              {this.props.t("errorInvalidEmail")}
++            </Form.Control.Feedback>
++            {securityFeaturesEnabled && this.state.passkeyAvailable && (
++              <p className="margin-top-25">
++                <Button
++                  variant="link"
++                  onClick={this.loginWithPasskey}
++                  disabled={
++                    this.state.inPasskeyLogin || this.state.inPasswordSubmit
++                  }
++                  type="button"
++                >
++                  {this.props.t("signInWithPasskey")}
++                </Button>
++                {this.state.passkeyLoginFailed && (
++                  <span className="text-danger d-block">
++                    {this.props.t("passkeyLoginFailed")}
++                  </span>
+                 )}
+-              </Button>
+-            </InputGroup>
+-          </Form.Group>
+-          <Form.Control.Feedback type="invalid">
+-            {this.props.t("errorInvalidEmail")}
+-          </Form.Control.Feedback>
+-          {securityFeaturesEnabled && this.state.passkeyAvailable && (
+-            <p className="margin-top-25">
+-              <Button
+-                variant="link"
+-                onClick={this.loginWithPasskey}
+-                disabled={
+-                  this.state.inPasskeyLogin || this.state.inPasswordSubmit
+-                }
+-                type="button"
+-              >
+-                {this.props.t("signInWithPasskey")}
+-              </Button>
+-              {this.state.passkeyLoginFailed && (
+-                <span className="text-danger d-block">
+-                  {this.props.t("passkeyLoginFailed")}
+-                </span>
+-              )}
++              </p>
++            )}
++            <p className="margin-top-50" hidden={!this.org || !securityFeaturesEnabled}>
++              <Link href="/resetpw">{this.props.t("forgotPassword")}</Link>
+             </p>
+-          )}
+-          <p
+-            className="margin-top-50"
+-            hidden={!this.org || !securityFeaturesEnabled}
+-          >
+-            <Link href="/resetpw">{this.props.t("forgotPassword")}</Link>
+-          </p>
+-        </Form>
+-        {copyrightFooter}
+-      </div>
++          </Form>
++          {copyrightFooter}
++        </div>
++      );
++    }
++
++    return (
++      <>
++        <Head>
++          <link key="favicon" rel="icon" href={faviconUrl} />
++          <link key="shortcut-icon" rel="shortcut icon" href={faviconUrl} />
++          <title key="title">{websiteName}</title>
++        </Head>
++        {body}
++      </>
+     );
+   }
+ }
+diff --git a/ui/src/pages/resetpw/[id].tsx b/ui/src/pages/resetpw/[id].tsx
+index 755b7a8a..80b1179e 100644
+--- a/ui/src/pages/resetpw/[id].tsx
++++ b/ui/src/pages/resetpw/[id].tsx
+@@ -4,6 +4,8 @@ import { NextRouter } from "next/router";
+ import Link from "next/link";
+ import withReadyRouter from "@/components/withReadyRouter";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
++import RuntimeConfig from "@/components/RuntimeConfig";
+ import Ajax from "@/util/Ajax";
+ import Validation from "@/util/Validation";
+ 
+@@ -56,9 +58,17 @@ class CompletePasswordReset extends React.Component<Props, State> {
+   render() {
+     if (this.state.complete && this.state.success) {
+       return (
+-        <div className="container-center">
+-          <div className="container-center-inner">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <div className="container-center">
++            <div className="container-center-inner">
++            <BrandMark
++              logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing.svg"
++              alt="Seatsurfing"
++              imageClassName="logo"
++              textClassName="brand-text"
++              textTag="h3"
++            />
+             <p>{this.props.t("passwordChanged")}</p>
+             <p>
+               <Link href="/login" className="btn btn-primary">
+@@ -76,7 +86,15 @@ class CompletePasswordReset extends React.Component<Props, State> {
+           className="container-center-inner"
+           onSubmit={this.onPasswordSubmit}
+         >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++            brandText={RuntimeConfig.INFOS.websiteName}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt="Seatsurfing"
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           <Form.Group>
+             <Form.Control
+               type="password"
+diff --git a/ui/src/pages/resetpw/index.tsx b/ui/src/pages/resetpw/index.tsx
+index 97ead5ce..b6713778 100644
+--- a/ui/src/pages/resetpw/index.tsx
++++ b/ui/src/pages/resetpw/index.tsx
+@@ -2,6 +2,7 @@ import React from "react";
+ import { Button, Form } from "react-bootstrap";
+ import Link from "next/link";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
+ import Organization from "@/types/Organization";
+ import Ajax from "@/util/Ajax";
+ import Navigation from "@/util/Navigation";
+@@ -107,7 +108,15 @@ class InitPasswordReset extends React.Component<Props, State> {
+           className="container-center-inner"
+           onSubmit={this.onPasswordSubmit}
+         >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={this.org?.logoUrl}
++            brandText={this.org?.websiteName || this.org?.name}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt={this.org?.websiteName || this.org?.name || "Seatsurfing"}
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           {this.renderContent()}
+           <p className="margin-top-50">
+             <Link href="/login">{this.props.t("back")}</Link>
+diff --git a/ui/src/pages/setpw/[id].tsx b/ui/src/pages/setpw/[id].tsx
+index 7115a86d..3d0f22d4 100644
+--- a/ui/src/pages/setpw/[id].tsx
++++ b/ui/src/pages/setpw/[id].tsx
+@@ -4,6 +4,8 @@ import { NextRouter } from "next/router";
+ import Link from "next/link";
+ import withReadyRouter from "@/components/withReadyRouter";
+ import { TranslationFunc, withTranslation } from "@/components/withTranslation";
++import BrandMark from "@/components/BrandMark";
++import RuntimeConfig from "@/components/RuntimeConfig";
+ import Ajax from "@/util/Ajax";
+ import Validation from "@/util/Validation";
+ 
+@@ -83,9 +85,17 @@ class CompleteUserInvitation extends React.Component<Props, State> {
+     // Show loading state while checking link validity
+     if (this.state.linkValid === null) {
+       return (
+-        <div className="container-center">
+-          <div className="container-center-inner">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <div className="container-center">
++            <div className="container-center-inner">
++              <BrandMark
++              logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing.svg"
++              alt="Seatsurfing"
++              imageClassName="logo"
++              textClassName="brand-text"
++              textTag="h3"
++            />
+             <p>{this.props.t("loading")}</p>
+           </div>
+         </div>
+@@ -95,9 +105,17 @@ class CompleteUserInvitation extends React.Component<Props, State> {
+     // Show error if link is expired or invalid
+     if (this.state.linkValid === false) {
+       return (
+-        <div className="container-center">
+-          <div className="container-center-inner">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <div className="container-center">
++            <div className="container-center-inner">
++              <BrandMark
++              logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing.svg"
++              alt="Seatsurfing"
++              imageClassName="logo"
++              textClassName="brand-text"
++              textTag="h3"
++            />
+             <p>{this.props.t("inviteLinkExpired")}</p>
+             <p>
+               <Link href="/login" className="btn btn-primary">
+@@ -111,9 +129,17 @@ class CompleteUserInvitation extends React.Component<Props, State> {
+ 
+     if (this.state.complete && this.state.success) {
+       return (
+-        <div className="container-center">
+-          <div className="container-center-inner">
+-            <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <div className="container-center">
++            <div className="container-center-inner">
++              <BrandMark
++              logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++              brandText={RuntimeConfig.INFOS.websiteName}
++              defaultLogoUrl="/ui/seatsurfing.svg"
++              alt="Seatsurfing"
++              imageClassName="logo"
++              textClassName="brand-text"
++              textTag="h3"
++            />
+             <p>{this.props.t("passwordChanged")}</p>
+             <p>
+               <Link href="/login" className="btn btn-primary">
+@@ -131,7 +157,15 @@ class CompleteUserInvitation extends React.Component<Props, State> {
+           className="container-center-inner"
+           onSubmit={this.onPasswordSubmit}
+         >
+-          <img src="/ui/seatsurfing.svg" alt="Seatsurfing" className="logo" />
++          <BrandMark
++            logoUrl={RuntimeConfig.INFOS.customLogoUrl}
++            brandText={RuntimeConfig.INFOS.websiteName}
++            defaultLogoUrl="/ui/seatsurfing.svg"
++            alt="Seatsurfing"
++            imageClassName="logo"
++            textClassName="brand-text"
++            textTag="h3"
++          />
+           <p>{this.props.t("welcomeSetPassword")}</p>
+           <Form.Group>
+             <Form.Control
+diff --git a/ui/src/styles/AdminNavBar.css b/ui/src/styles/AdminNavBar.css
+index 06c87df7..bab393ee 100644
+--- a/ui/src/styles/AdminNavBar.css
++++ b/ui/src/styles/AdminNavBar.css
+@@ -7,6 +7,18 @@
+   height: 30px;
+ }
+ 
++.admin-navbar .navbar-brand-text {
++  color: #fff;
++  font-size: 1rem;
++  font-weight: 600;
++  line-height: 30px;
++  white-space: nowrap;
++}
++
++.admin-navbar .admin-navbar-brand-image {
++  height: 30px;
++}
++
+ .admin-navbar .navbar-toggler {
+   top: 0.25rem;
+   right: 1rem;
+diff --git a/ui/src/styles/Login.css b/ui/src/styles/Login.css
+index be41c470..f05bc3c1 100644
+--- a/ui/src/styles/Login.css
++++ b/ui/src/styles/Login.css
+@@ -34,6 +34,13 @@
+   margin-bottom: 50px;
+ }
+ 
++.form-signin .brand-text {
++  margin-bottom: 50px;
++  font-size: 1.75rem;
++  font-weight: 600;
++  line-height: 1.2;
++}
++
+ .form-signin .form-control:focus {
+   box-shadow: none;
+ }
+diff --git a/ui/src/styles/NavBar.css b/ui/src/styles/NavBar.css
+index 3375f012..17f92268 100644
+--- a/ui/src/styles/NavBar.css
++++ b/ui/src/styles/NavBar.css
+@@ -7,6 +7,12 @@
+   height: 2rem;
+ }
+ 
++.navbar-brand-text {
++  font-size: 1.1rem;
++  font-weight: 600;
++  line-height: 2rem;
++}
++
+ .navbar-nav .nav-link.active {
+   color: var(--bs-primary) !important;
+ }
+diff --git a/ui/src/types/Organization.ts b/ui/src/types/Organization.ts
+index c1a9f829..23b54753 100644
+--- a/ui/src/types/Organization.ts
++++ b/ui/src/types/Organization.ts
+@@ -8,6 +8,8 @@ export default class Organization extends Entity {
+   contactEmail: string;
+   language: string;
+   featureSecurityFeatures: boolean;
++  websiteName: string;
++  logoUrl: string;
+ 
+   constructor() {
+     super();
+@@ -17,6 +19,8 @@ export default class Organization extends Entity {
+     this.contactEmail = "";
+     this.language = "";
+     this.featureSecurityFeatures = true;
++    this.websiteName = "";
++    this.logoUrl = "";
+   }
+ 
+   serialize(): Object {
+@@ -38,6 +42,8 @@ export default class Organization extends Entity {
+     this.contactEmail = input.email;
+     this.language = input.language;
+     this.featureSecurityFeatures = input.featureSecurityFeatures ?? true;
++    this.websiteName = input.websiteName;
++    this.logoUrl = input.logoUrl;
+   }
+ 
+   getBackendUrl(): string {
+diff --git a/ui/src/util/Branding.ts b/ui/src/util/Branding.ts
+new file mode 100644
+index 00000000..ec0da18e
+--- /dev/null
++++ b/ui/src/util/Branding.ts
+@@ -0,0 +1,5 @@
++export function getFaviconHref(
++  logoUrl?: string | null,
++): string {
++  return logoUrl && logoUrl.trim() ? logoUrl : "/ui/favicon.ico";
++}
+-- 
+2.54.0
+

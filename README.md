@@ -17,6 +17,7 @@ The repository contains:
 
 - Sub-group hierarchy
 - Configurable mail, security, and CalDAV feature toggles
+- Customizable branding for website name, logo, and favicon
 - Group-management enhancements
 
 ## Documentation

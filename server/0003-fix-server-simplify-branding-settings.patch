@@ -1,0 +1,309 @@
+From 03de360a379c2cfecab2381d06105182e65e82f0 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Tue, 26 May 2026 12:49:16 +0100
+Subject: [PATCH] fix(server): simplify branding settings
+
+---
+ server/repository/settings-repository.go   |  2 +
+ server/router/auth-router.go               |  3 +
+ server/router/branding.go                  | 23 +++++++
+ server/router/organization-router.go       | 11 +--
+ server/router/settings-router.go           |  5 ++
+ server/router/test/auth-router_test.go     | 18 +++++
+ server/router/test/settings-router_test.go | 80 +++++++++++++++-------
+ 7 files changed, 115 insertions(+), 27 deletions(-)
+ create mode 100644 server/router/branding.go
+
+diff --git a/server/repository/settings-repository.go b/server/repository/settings-repository.go
+index ace4884e..9f5ef024 100644
+--- a/server/repository/settings-repository.go
++++ b/server/repository/settings-repository.go
+@@ -49,6 +49,7 @@ var (
+ 	SettingDailyBasisBooking              SettingName = SettingName{Name: "daily_basis_booking", Type: SettingTypeBool}
+ 	SettingNoAdminRestrictions            SettingName = SettingName{Name: "no_admin_restrictions", Type: SettingTypeBool}
+ 	SettingCustomLogoUrl                  SettingName = SettingName{Name: "custom_logo_url", Type: SettingTypeString}
++	SettingWebsiteName                    SettingName = SettingName{Name: "website_name", Type: SettingTypeString}
+ 	SettingShowNames                      SettingName = SettingName{Name: "show_names", Type: SettingTypeBool}
+ 	SettingAllowBookingsNonExistingUsers  SettingName = SettingName{Name: "allow_booking_nonexist_users", Type: SettingTypeBool}
+ 	SettingDisableBuddies                 SettingName = SettingName{Name: "disable_buddies", Type: SettingTypeBool}
+@@ -281,6 +282,7 @@ func (r *SettingsRepository) InitDefaultSettingsForOrg(organizationID string) er
+ 		"($1, '"+SettingDailyBasisBooking.Name+"', '0'), "+
+ 		"($1, '"+SettingNoAdminRestrictions.Name+"', '0'), "+
+ 		"($1, '"+SettingCustomLogoUrl.Name+"', ''), "+
++		"($1, '"+SettingWebsiteName.Name+"', ''), "+
+ 		"($1, '"+SettingShowNames.Name+"', '0'), "+
+ 		"($1, '"+SettingAllowBookingsNonExistingUsers.Name+"', '0'), "+
+ 		"($1, '"+SettingDisableBuddies.Name+"', '0'), "+
+diff --git a/server/router/auth-router.go b/server/router/auth-router.go
+index 712873bd..c9bd878b 100644
+--- a/server/router/auth-router.go
++++ b/server/router/auth-router.go
+@@ -1269,6 +1269,9 @@ func (router *AuthRouter) getPreflightResponseForOrg(org *Organization) *AuthPre
+ 	if domain != nil && err == nil {
+ 		res.Domain = domain.DomainName
+ 	}
++	branding := getOrganizationBranding(org.ID, org.Name)
++	res.Organization.WebsiteName = branding.WebsiteName
++	res.Organization.LogoURL = branding.LogoURL
+ 	for _, e := range list {
+ 		m := &GetAuthProviderPublicResponse{}
+ 		m.ID = e.ID
+diff --git a/server/router/branding.go b/server/router/branding.go
+new file mode 100644
+index 00000000..cfd60cd0
+--- /dev/null
++++ b/server/router/branding.go
+@@ -0,0 +1,23 @@
++package router
++
++import . "github.com/seatsurfing/seatsurfing/server/repository"
++
++type BrandingInfo struct {
++	WebsiteName string
++	LogoURL     string
++}
++
++func getOrganizationBranding(organizationID string, organizationName string) BrandingInfo {
++	branding := BrandingInfo{
++		WebsiteName: organizationName,
++	}
++
++	if value, err := GetSettingsRepository().Get(organizationID, SettingWebsiteName.Name); err == nil && value != "" {
++		branding.WebsiteName = value
++	}
++	if value, err := GetSettingsRepository().Get(organizationID, SettingCustomLogoUrl.Name); err == nil {
++		branding.LogoURL = value
++	}
++
++	return branding
++}
+diff --git a/server/router/organization-router.go b/server/router/organization-router.go
+index 573c1b3e..1e1ea77c 100644
+--- a/server/router/organization-router.go
++++ b/server/router/organization-router.go
+@@ -29,7 +29,9 @@ type CreateOrganizationRequest struct {
+ type GetOrganizationResponse struct {
+ 	ID string `json:"id"`
+ 	CreateOrganizationRequest
+-	FeatureSecurityFeatures bool `json:"featureSecurityFeatures"`
++	FeatureSecurityFeatures bool   `json:"featureSecurityFeatures"`
++	WebsiteName             string `json:"websiteName,omitempty"`
++	LogoURL                 string `json:"logoUrl,omitempty"`
+ }
+ 
+ type GetDomainResponse struct {
+@@ -114,9 +116,7 @@ func (router *OrganizationRouter) getOrgForDomain(w http.ResponseWriter, r *http
+ 		SendNotFound(w)
+ 		return
+ 	}
+-	res := &GetOrganizationResponse{}
+-	res.ID = e.ID
+-	res.Name = e.Name
++	res := router.copyToRestModel(e)
+ 	SendJSON(w, res)
+ }
+ 
+@@ -641,5 +641,8 @@ func (router *OrganizationRouter) copyToRestModel(e *Organization) *GetOrganizat
+ 	m.Email = e.ContactEmail
+ 	m.Language = e.Language
+ 	m.FeatureSecurityFeatures = areSecurityFeaturesEnabled(e.ID)
++	branding := getOrganizationBranding(e.ID, e.Name)
++	m.WebsiteName = branding.WebsiteName
++	m.LogoURL = branding.LogoURL
+ 	return m
+ }
+diff --git a/server/router/settings-router.go b/server/router/settings-router.go
+index c0b8852b..f7af2872 100644
+--- a/server/router/settings-router.go
++++ b/server/router/settings-router.go
+@@ -274,6 +274,7 @@ func (router *SettingsRouter) isValidSettingNameReadPublic(name string) bool {
+ 		name == SettingDailyBasisBooking.Name ||
+ 		name == SettingNoAdminRestrictions.Name ||
+ 		name == SettingCustomLogoUrl.Name ||
++		name == SettingWebsiteName.Name ||
+ 		name == SettingDefaultTimezone.Name ||
+ 		name == SettingDisableBuddies.Name ||
+ 		name == SettingFeatureRecurringBookings.Name ||
+@@ -340,6 +341,7 @@ func (router *SettingsRouter) isValidSettingNameWrite(name string) bool {
+ 		name == SettingDailyBasisBooking.Name ||
+ 		name == SettingNoAdminRestrictions.Name ||
+ 		name == SettingCustomLogoUrl.Name ||
++		name == SettingWebsiteName.Name ||
+ 		name == SettingShowNames.Name ||
+ 		name == SettingMaxHoursPartiallyBooked.Name ||
+ 		name == SettingMaxHoursPartiallyBookedEnabled.Name ||
+@@ -415,6 +417,9 @@ func (router *SettingsRouter) getSettingType(name string) SettingType {
+ 	if name == SettingCustomLogoUrl.Name {
+ 		return SettingCustomLogoUrl.Type
+ 	}
++	if name == SettingWebsiteName.Name {
++		return SettingWebsiteName.Type
++	}
+ 	if name == SettingMaxHoursPartiallyBooked.Name {
+ 		return SettingMaxHoursPartiallyBooked.Type
+ 	}
+diff --git a/server/router/test/auth-router_test.go b/server/router/test/auth-router_test.go
+index 2592d9bd..a06ce905 100644
+--- a/server/router/test/auth-router_test.go
++++ b/server/router/test/auth-router_test.go
+@@ -993,6 +993,24 @@ func TestAuthGetOrgDetailsNotFound(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusNotFound, res.Code)
+ }
+ 
++func TestAuthGetOrgDetailsBranding(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	GetSettingsRepository().Set(org.ID, SettingWebsiteName.Name, "Acme Desk")
++	GetSettingsRepository().Set(org.ID, SettingCustomLogoUrl.Name, "https://example.com/logo.svg")
++
++	req := NewHTTPRequest("GET", "/auth/org/test.com", "", nil)
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++
++	var resBody *AuthPreflightResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestIsNil(t, resBody)
++	CheckTestString(t, "Acme Desk", resBody.Organization.WebsiteName)
++	CheckTestString(t, "https://example.com/logo.svg", resBody.Organization.LogoURL)
++	CheckTestString(t, "Test Org", resBody.Organization.Name)
++}
++
+ func TestAuthGetOrgDetailsFound(t *testing.T) {
+ 	ClearTestDB()
+ 	// CreateTestOrg creates org, GetOneByDomain needs active domain
+diff --git a/server/router/test/settings-router_test.go b/server/router/test/settings-router_test.go
+index 1123ad88..fe0a3aaa 100644
+--- a/server/router/test/settings-router_test.go
++++ b/server/router/test/settings-router_test.go
+@@ -12,6 +12,14 @@ import (
+ 	. "github.com/seatsurfing/seatsurfing/server/util"
+ )
+ 
++func settingsResponseMap(list []GetSettingsResponse) map[string]string {
++	result := map[string]string{}
++	for _, item := range list {
++		result[item.Name] = item.Value
++	}
++	return result
++}
++
+ func TestSettingsForbidden(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+@@ -64,6 +72,7 @@ func TestSettingsReadPublic(t *testing.T) {
+ 		SettingAllowBookingsNonExistingUsers.Name,
+ 		SettingDefaultTimezone.Name,
+ 		SettingCustomLogoUrl.Name,
++		SettingWebsiteName.Name,
+ 		SysSettingVersion,
+ 		SysSettingOrgPrimaryDomain,
+ 		SysSettingDisablePasswordLogin,
+@@ -148,6 +157,7 @@ func TestSettingsReadAdmin(t *testing.T) {
+ 		SettingFeatureCalDAV.Name,
+ 		SettingDefaultTimezone.Name,
+ 		SettingCustomLogoUrl.Name,
++		SettingWebsiteName.Name,
+ 		SysSettingOrgSignupDelete,
+ 		SysSettingVersion,
+ 		SysSettingAdminMenuItems,
+@@ -260,15 +270,10 @@ func TestSettingsCRUDMany(t *testing.T) {
+ 	var resBody []GetSettingsResponse
+ 	json.Unmarshal(res.Body.Bytes(), &resBody)
+ 	CheckTestInt(t, 8, len(resBody))
+-	CheckTestString(t, SettingAllowAnyUser.Name, resBody[0].Name)
+-	CheckTestString(t, SettingMaxBookingsPerUser.Name, resBody[1].Name)
+-	CheckTestString(t, SysSettingOrgSignupDelete, resBody[2].Name)
+-	CheckTestString(t, SysSettingAdminWelcomeScreens, resBody[3].Name)
+-	CheckTestString(t, SysSettingAdminMenuItems, resBody[4].Name)
+-	CheckTestString(t, SysSettingVersion, resBody[5].Name)
+-	CheckTestString(t, "1", resBody[0].Value)
+-	CheckTestString(t, "5", resBody[1].Value)
+-	CheckTestString(t, GetProductVersion(), resBody[5].Value)
++	resMap := settingsResponseMap(resBody)
++	CheckTestString(t, "1", resMap[SettingAllowAnyUser.Name])
++	CheckTestString(t, "5", resMap[SettingMaxBookingsPerUser.Name])
++	CheckTestString(t, GetProductVersion(), resMap[SysSettingVersion])
+ 
+ 	payload = `[{"name": "allow_any_user", "value": "0"}, {"name": "max_bookings_per_user", "value": "3"}]`
+ 	req = NewHTTPRequest("PUT", "/setting/", loginResponse.UserID, bytes.NewBufferString(payload))
+@@ -281,12 +286,10 @@ func TestSettingsCRUDMany(t *testing.T) {
+ 	var resBody2 []GetSettingsResponse
+ 	json.Unmarshal(res.Body.Bytes(), &resBody2)
+ 	CheckTestInt(t, 8, len(resBody2))
+-	CheckTestString(t, SettingAllowAnyUser.Name, resBody2[0].Name)
+-	CheckTestString(t, SettingMaxBookingsPerUser.Name, resBody2[1].Name)
+-	CheckTestString(t, SysSettingOrgSignupDelete, resBody2[2].Name)
+-	CheckTestString(t, SysSettingVersion, resBody2[5].Name)
+-	CheckTestString(t, "0", resBody2[0].Value)
+-	CheckTestString(t, "3", resBody2[1].Value)
++	resMap2 := settingsResponseMap(resBody2)
++	CheckTestString(t, "0", resMap2[SettingAllowAnyUser.Name])
++	CheckTestString(t, "3", resMap2[SettingMaxBookingsPerUser.Name])
++	CheckTestString(t, GetProductVersion(), resMap2[SysSettingVersion])
+ 
+ }
+ 
+@@ -308,10 +311,9 @@ func TestSettingsMaxHoursBeforeDelete(t *testing.T) {
+ 	var resBody3 []GetSettingsResponse
+ 	json.Unmarshal(res.Body.Bytes(), &resBody3)
+ 	CheckTestInt(t, 7, len(resBody3))
+-	CheckTestString(t, SettingMaxHoursBeforeDelete.Name, resBody3[0].Name)
+-	CheckTestString(t, SysSettingOrgSignupDelete, resBody3[1].Name)
+-	CheckTestString(t, SysSettingVersion, resBody3[4].Name)
+-	CheckTestString(t, "2", resBody3[0].Value)
++	resMap3 := settingsResponseMap(resBody3)
++	CheckTestString(t, "2", resMap3[SettingMaxHoursBeforeDelete.Name])
++	CheckTestString(t, GetProductVersion(), resMap3[SysSettingVersion])
+ }
+ 
+ func TestSettingsMinHoursBookingDuration(t *testing.T) {
+@@ -332,10 +334,42 @@ func TestSettingsMinHoursBookingDuration(t *testing.T) {
+ 	var resBody3 []GetSettingsResponse
+ 	json.Unmarshal(res.Body.Bytes(), &resBody3)
+ 	CheckTestInt(t, 7, len(resBody3))
+-	CheckTestString(t, SettingMinBookingDurationHours.Name, resBody3[0].Name)
+-	CheckTestString(t, SysSettingOrgSignupDelete, resBody3[1].Name)
+-	CheckTestString(t, SysSettingVersion, resBody3[4].Name)
+-	CheckTestString(t, "2", resBody3[0].Value)
++	resMap4 := settingsResponseMap(resBody3)
++	CheckTestString(t, "2", resMap4[SettingMinBookingDurationHours.Name])
++	CheckTestString(t, GetProductVersion(), resMap4[SysSettingVersion])
++}
++
++func TestSettingsBrandingCRUD(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserOrgAdmin(org)
++	loginResponse := LoginTestUser(user.ID)
++
++	payload := `[{"name": "website_name", "value": "Acme Desk"},{"name": "custom_logo_url", "value": "https://example.com/logo.svg"}]`
++	req := NewHTTPRequest("PUT", "/setting/", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusNoContent, res.Code)
++
++	req = NewHTTPRequest("GET", "/setting/website_name", loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var websiteName string
++	json.Unmarshal(res.Body.Bytes(), &websiteName)
++	CheckTestString(t, "Acme Desk", websiteName)
++
++	req = NewHTTPRequest("GET", "/setting/", loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody []GetSettingsResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	resMap := settingsResponseMap(resBody)
++	CheckTestString(t, "Acme Desk", resMap[SettingWebsiteName.Name])
++	CheckTestString(t, "https://example.com/logo.svg", resMap[SettingCustomLogoUrl.Name])
++
++	payload = `{"value": "notaurl"}`
++	req = NewHTTPRequest("PUT", "/setting/"+SettingCustomLogoUrl.Name, loginResponse.UserID, bytes.NewBufferString(payload))
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
+ }
+ 
+ func TestSettingsInvalidName(t *testing.T) {
+-- 
+2.54.0
+

@@ -1,0 +1,221 @@
+From 7410a46b016a4cf4f2b6a8316b39cc570b0a3c9e Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 10:19:08 +0100
+Subject: [PATCH] fix(i18n): remove favicon branding keys
+
+---
+ ui/i18n/translations.de.json    | 2 ++
+ ui/i18n/translations.en-GB.json | 2 ++
+ ui/i18n/translations.en-US.json | 2 ++
+ ui/i18n/translations.es.json    | 2 ++
+ ui/i18n/translations.et.json    | 2 ++
+ ui/i18n/translations.fi.json    | 2 ++
+ ui/i18n/translations.fr.json    | 2 ++
+ ui/i18n/translations.he.json    | 2 ++
+ ui/i18n/translations.hu.json    | 2 ++
+ ui/i18n/translations.it.json    | 2 ++
+ ui/i18n/translations.nl.json    | 2 ++
+ ui/i18n/translations.pl.json    | 2 ++
+ ui/i18n/translations.pt.json    | 2 ++
+ ui/i18n/translations.ro.json    | 2 ++
+ ui/i18n/translations.zh-TW.json | 2 ++
+ 15 files changed, 30 insertions(+)
+
+diff --git a/ui/i18n/translations.de.json b/ui/i18n/translations.de.json
+index 7f4ddb2b..2eef8e9b 100644
+--- a/ui/i18n/translations.de.json
++++ b/ui/i18n/translations.de.json
+@@ -94,6 +94,8 @@
+   "createAccount": "Kostenlosen Account erstellen",
+   "customLogoUrl": "Logo URL",
+   "customLogoUrlHint": "Leer lassen, um das Standard-Logo zu nutzen",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "täglich",
+   "dailyBasisBooking": "Nur tageweise Buchung erlauben",
+   "dangerZone": "Kritische Funktionen",
+diff --git a/ui/i18n/translations.en-GB.json b/ui/i18n/translations.en-GB.json
+index 9cccf876..dc4b78d8 100644
+--- a/ui/i18n/translations.en-GB.json
++++ b/ui/i18n/translations.en-GB.json
+@@ -100,6 +100,8 @@
+   "createAccount": "Create free account",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Allow bookings on a daily basis only",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.en-US.json b/ui/i18n/translations.en-US.json
+index 03427433..bb912ed4 100644
+--- a/ui/i18n/translations.en-US.json
++++ b/ui/i18n/translations.en-US.json
+@@ -94,6 +94,8 @@
+   "createAccount": "Create free account",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Allow bookings on a daily basis only",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.es.json b/ui/i18n/translations.es.json
+index 06ed85ce..b174ef3b 100644
+--- a/ui/i18n/translations.es.json
++++ b/ui/i18n/translations.es.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Crear cuenta gratuita",
+   "customLogoUrl": "URL de logotipo personalizado",
+   "customLogoUrlHint": "Deja vacío para usar el logotipo por defecto",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "diario",
+   "dailyBasisBooking": "Permitir reservas solo por día",
+   "dangerZone": "Zona de peligro",
+diff --git a/ui/i18n/translations.et.json b/ui/i18n/translations.et.json
+index 1f289d82..1668e1de 100644
+--- a/ui/i18n/translations.et.json
++++ b/ui/i18n/translations.et.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Loo tasuta konto",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Allow bookings on a daily basis only",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.fi.json b/ui/i18n/translations.fi.json
+index 177349ab..f7e91f90 100644
+--- a/ui/i18n/translations.fi.json
++++ b/ui/i18n/translations.fi.json
+@@ -100,6 +100,8 @@
+   "createAccount": "Luo maksuton tili",
+   "customLogoUrl": "Mukautetun logon URL",
+   "customLogoUrlHint": "Jätä tyhjäksi käyttääksesi oletuslogoa",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "päivittäin",
+   "dailyBasisBooking": "Salli varaukset vain päiväkohtaisesti",
+   "dangerZone": "Vaara-alue",
+diff --git a/ui/i18n/translations.fr.json b/ui/i18n/translations.fr.json
+index 19fbc535..3d6b719e 100644
+--- a/ui/i18n/translations.fr.json
++++ b/ui/i18n/translations.fr.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Créer un compte gratuit",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Autoriser les réservations sur une base quotidienne seulement",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.he.json b/ui/i18n/translations.he.json
+index dc4c2416..1e54fd0b 100644
+--- a/ui/i18n/translations.he.json
++++ b/ui/i18n/translations.he.json
+@@ -93,6 +93,8 @@
+   "createAccount": "יצירת חשבון חינמי",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "לאפשר הזמנות על בסיסי יומי בלבד",
+   "dangerZone": "אזור הדמדומים",
+diff --git a/ui/i18n/translations.hu.json b/ui/i18n/translations.hu.json
+index 23387ca8..a28b099a 100644
+--- a/ui/i18n/translations.hu.json
++++ b/ui/i18n/translations.hu.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Ingyenes fiók létrehozása",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Allow bookings on a daily basis only",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.it.json b/ui/i18n/translations.it.json
+index 0607aec0..681ed241 100644
+--- a/ui/i18n/translations.it.json
++++ b/ui/i18n/translations.it.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Crea un account",
+   "customLogoUrl": "URL del logo personalizzato",
+   "customLogoUrlHint": "Lasciare vuoto per usare il logo predefinito",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Consenti prenotazioni solo su base giornaliera",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.nl.json b/ui/i18n/translations.nl.json
+index 4288dde2..2c9dc6f5 100644
+--- a/ui/i18n/translations.nl.json
++++ b/ui/i18n/translations.nl.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Maak een gratis account.",
+   "customLogoUrl": "Aangepast logo URL",
+   "customLogoUrlHint": "Laat dit leeg om het standaardlogo te gebruiken",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "dagelijks",
+   "dailyBasisBooking": "Alleen boekingen op dagelijkse basis toestaan",
+   "dangerZone": "Gevarenzone",
+diff --git a/ui/i18n/translations.pl.json b/ui/i18n/translations.pl.json
+index bea2ce24..4a96c28a 100644
+--- a/ui/i18n/translations.pl.json
++++ b/ui/i18n/translations.pl.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Utwórz darmowe konto",
+   "customLogoUrl": "Niestandardowy URL logo",
+   "customLogoUrlHint": "Pozostaw puste, aby użyć domyślnego logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "codziennie",
+   "dailyBasisBooking": "Zezwól tylko na rezerwacje w ujęciu dziennym",
+   "dangerZone": "Strefa zagrożenia",
+diff --git a/ui/i18n/translations.pt.json b/ui/i18n/translations.pt.json
+index c5f3530b..796b6d9b 100644
+--- a/ui/i18n/translations.pt.json
++++ b/ui/i18n/translations.pt.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Criar conta gratuita",
+   "customLogoUrl": "URL do logotipo personalizado",
+   "customLogoUrlHint": "Deixe vazio para usar o logotipo padrão",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "diariamente",
+   "dailyBasisBooking": "Permitir reservas apenas diariamente",
+   "dangerZone": "Zona de perigo",
+diff --git a/ui/i18n/translations.ro.json b/ui/i18n/translations.ro.json
+index b9beab38..1a794bc0 100644
+--- a/ui/i18n/translations.ro.json
++++ b/ui/i18n/translations.ro.json
+@@ -93,6 +93,8 @@
+   "createAccount": "Creează cont gratuit",
+   "customLogoUrl": "Custom logo URL",
+   "customLogoUrlHint": "Leave empty to use the default logo",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "daily",
+   "dailyBasisBooking": "Allow bookings on a daily basis only",
+   "dangerZone": "Danger zone",
+diff --git a/ui/i18n/translations.zh-TW.json b/ui/i18n/translations.zh-TW.json
+index 514f1239..d766a45e 100644
+--- a/ui/i18n/translations.zh-TW.json
++++ b/ui/i18n/translations.zh-TW.json
+@@ -100,6 +100,8 @@
+   "createAccount": "建立免費帳戶",
+   "customLogoUrl": "自訂標誌網址",
+   "customLogoUrlHint": "留空以使用預設徽標",
++  "websiteName": "Website name",
++  "websiteNameHint": "Shown in the browser title and on the login page",
+   "daily": "每日",
+   "dailyBasisBooking": "僅允許每日預訂",
+   "dangerZone": "危險區域",
+-- 
+2.54.0
+
