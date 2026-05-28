@@ -1,0 +1,442 @@
+From 20a431a650a629b6d47f0d1eb481842838d5c6cb Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 22:00:07 +0100
+Subject: [PATCH] feat(admin-ui): import users from csv
+
+---
+ ui/public/user-import-example.csv  |   4 +
+ ui/src/pages/admin/users/index.tsx | 119 +++++++++++++++++++++++++-
+ ui/src/types/User.ts               |  23 +++++
+ ui/src/util/UserCsvImport.test.ts  |  44 ++++++++++
+ ui/src/util/UserCsvImport.ts       | 129 +++++++++++++++++++++++++++++
+ 5 files changed, 317 insertions(+), 2 deletions(-)
+ create mode 100644 ui/public/user-import-example.csv
+ create mode 100644 ui/src/util/UserCsvImport.test.ts
+ create mode 100644 ui/src/util/UserCsvImport.ts
+
+diff --git a/ui/public/user-import-example.csv b/ui/public/user-import-example.csv
+new file mode 100644
+index 00000000..058135fe
+--- /dev/null
++++ b/ui/public/user-import-example.csv
+@@ -0,0 +1,4 @@
++email,firstname,lastname,role,password,sendInvitation,authProviderId,organizationId,groupNames,groupIds
++john.doe@example.com,John,Doe,user,Sea!surf1ng,false,,,"Engineering;Support",
++jane.admin@example.com,Jane,Admin,orgAdmin,,true,,,"Administrators",
++service-ro@example.com,Reporting,Service Account,serviceAccountRO,Sea!surf1ng,false,,,,
+diff --git a/ui/src/pages/admin/users/index.tsx b/ui/src/pages/admin/users/index.tsx
+index 14dff6ae..2c3c101e 100644
+--- a/ui/src/pages/admin/users/index.tsx
++++ b/ui/src/pages/admin/users/index.tsx
+@@ -1,6 +1,10 @@
+ import React from "react";
+-import { Table } from "react-bootstrap";
+-import { Plus as IconPlus, Download as IconDownload } from "react-feather";
++import { Alert, Table } from "react-bootstrap";
++import {
++  Plus as IconPlus,
++  Download as IconDownload,
++  Upload as IconUpload,
++} from "react-feather";
+ import FullLayout from "@/components/FullLayout";
+ import Loading from "@/components/Loading";
+ import Link from "next/link";
+@@ -12,10 +16,14 @@ import Ajax from "@/util/Ajax";
+ import AuthProvider from "@/types/AuthProvider";
+ import RuntimeConfig from "@/components/RuntimeConfig";
+ import RedirectUtil from "@/util/RedirectUtil";
++import { parseUserCsvImport } from "@/util/UserCsvImport";
+ 
+ interface State {
+   selectedItem: string;
+   loading: boolean;
++  importing: boolean;
++  importMessage: string;
++  importError: boolean;
+ }
+ 
+ interface Props {
+@@ -33,6 +41,9 @@ class Users extends React.Component<Props, State> {
+     this.state = {
+       selectedItem: "",
+       loading: true,
++      importing: false,
++      importMessage: "",
++      importError: false,
+     };
+   }
+ 
+@@ -111,6 +122,94 @@ class Users extends React.Component<Props, State> {
+     );
+   };
+ 
++  getImportErrorText = (code: string) => {
++    const translationKeys: { [key: string]: string } = {
++      invalid_group: "userCsvImportInvalidGroup",
++      user_already_exists: "userCsvImportUserAlreadyExists",
++      invalid_user: "userCsvImportInvalidUser",
++      forbidden: "userCsvImportForbidden",
++      user_limit_exceeded: "userCsvImportUserLimitExceeded",
++      group_membership_failed: "userCsvImportGroupMembershipFailed",
++      internal_error: "userCsvImportInternalError",
++    };
++    return this.props.t(translationKeys[code] || "userCsvImportInternalError");
++  };
++
++  onImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file =
++      e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
++    e.target.value = "";
++    if (!file) {
++      return;
++    }
++    const reader = new FileReader();
++    reader.onload = () => {
++      try {
++        const rows = parseUserCsvImport(String(reader.result || ""));
++        this.setState({
++          importing: true,
++          importMessage: "",
++          importError: false,
++        });
++        User.importUsers(rows)
++          .then((result) => {
++            let message =
++              result.created + " " + this.props.t("userCsvImportSuccess");
++            if (result.failed > 0) {
++              const errors = result.results
++                .filter((item) => item.status === "failed")
++                .map(
++                  (item) =>
++                    this.props.t("userCsvImportRow") +
++                    " " +
++                    item.row +
++                    ": " +
++                    this.getImportErrorText(item.error),
++                )
++                .join("; ");
++              message +=
++                " " +
++                result.failed +
++                " " +
++                this.props.t("userCsvImportFailed") +
++                " " +
++                errors;
++            }
++            this.setState({
++              importing: false,
++              importMessage: message,
++              importError: result.failed > 0,
++            });
++            this.loadItems();
++          })
++          .catch(() => {
++            this.setState({
++              importing: false,
++              importMessage: this.props.t("userCsvImportError"),
++              importError: true,
++            });
++          });
++      } catch {
++        this.setState({
++          importMessage: this.props.t("userCsvImportInvalid"),
++          importError: true,
++        });
++      }
++    };
++    reader.readAsText(file);
++  };
++
++  renderImportStatus = () => {
++    if (!this.state.importMessage) {
++      return <></>;
++    }
++    return (
++      <Alert variant={this.state.importError ? "danger" : "success"}>
++        {this.state.importMessage}
++      </Alert>
++    );
++  };
++
+   render() {
+     if (this.state.selectedItem) {
+       this.props.router.push(`/admin/users/${this.state.selectedItem}`);
+@@ -130,6 +229,19 @@ class Users extends React.Component<Props, State> {
+     let buttons = (
+       <>
+         {this.data && this.data.length > 0 ? downloadButton : <></>}
++        <label className="btn btn-sm btn-outline-secondary mb-0">
++          <IconUpload className="feather" />{" "}
++          {this.state.importing
++            ? this.props.t("loading")
++            : this.props.t("importCsv")}
++          <input
++            type="file"
++            accept=".csv,text/csv"
++            className="d-none"
++            onChange={this.onImportFileChange}
++            disabled={this.state.importing}
++          />
++        </label>
+         <Link
+           href="/admin/users/add"
+           className="btn btn-sm btn-outline-secondary"
+@@ -142,6 +254,7 @@ class Users extends React.Component<Props, State> {
+     if (this.state.loading) {
+       return (
+         <FullLayout headline={this.props.t("users")} buttons={buttons}>
++          {this.renderImportStatus()}
+           <Loading />
+         </FullLayout>
+       );
+@@ -151,12 +264,14 @@ class Users extends React.Component<Props, State> {
+     if (rows.length === 0) {
+       return (
+         <FullLayout headline={this.props.t("users")} buttons={buttons}>
++          {this.renderImportStatus()}
+           <p>{this.props.t("noRecords")}</p>
+         </FullLayout>
+       );
+     }
+     return (
+       <FullLayout headline={this.props.t("users")} buttons={buttons}>
++        {this.renderImportStatus()}
+         <Table
+           striped={true}
+           hover={true}
+diff --git a/ui/src/types/User.ts b/ui/src/types/User.ts
+index f414f110..147c901a 100644
+--- a/ui/src/types/User.ts
++++ b/ui/src/types/User.ts
+@@ -3,6 +3,7 @@ import Ajax from "../util/Ajax";
+ import Organization from "./Organization";
+ import MergeRequest from "./MergeRequest";
+ import { BuddyBooking } from "./Buddy";
++import type { UserCsvImportRow } from "@/util/UserCsvImport";
+ 
+ export default class User extends Entity {
+   static UserRoleUser: number = 0;
+@@ -185,6 +186,14 @@ export default class User extends Entity {
+     });
+   }
+ 
++  static async importUsers(
++    rows: UserCsvImportRow[],
++  ): Promise<UserImportResult> {
++    return Ajax.postData("/user/import", { users: rows }).then((result) => {
++      return result.json as UserImportResult;
++    });
++  }
++
+   static async getByEmail(email: string): Promise<User> {
+     return Ajax.get("/user/byEmail/" + email).then((result) => {
+       let e: User = new User();
+@@ -245,6 +254,20 @@ export default class User extends Entity {
+   }
+ }
+ 
++export interface UserImportRowResult {
++  row: number;
++  id: string;
++  email: string;
++  status: string;
++  error: string;
++}
++
++export interface UserImportResult {
++  created: number;
++  failed: number;
++  results: UserImportRowResult[];
++}
++
+ export class TotpGenerateResponse {
+   qrCode: string;
+   stateId: string;
+diff --git a/ui/src/util/UserCsvImport.test.ts b/ui/src/util/UserCsvImport.test.ts
+new file mode 100644
+index 00000000..3938dea7
+--- /dev/null
++++ b/ui/src/util/UserCsvImport.test.ts
+@@ -0,0 +1,44 @@
++import { describe, expect, it } from "vitest";
++
++import User from "@/types/User";
++import { parseUserCsvImport } from "./UserCsvImport";
++
++describe("parseUserCsvImport", () => {
++  it("parses create-user fields and groups", () => {
++    const rows = parseUserCsvImport(
++      [
++        "email,firstname,lastname,role,password,sendInvitation,authProviderId,organizationId,groupNames,groupIds",
++        '"john@example.com",John,Doe,spaceAdmin,Sea!surf1ng,no,,,"Engineering; Support","11111111-1111-4111-8111-111111111111"',
++      ].join("\n"),
++    );
++
++    expect(rows).toHaveLength(1);
++    expect(rows[0].email).toBe("john@example.com");
++    expect(rows[0].firstname).toBe("John");
++    expect(rows[0].lastname).toBe("Doe");
++    expect(rows[0].role).toBe(User.UserRoleSpaceAdmin);
++    expect(rows[0].password).toBe("Sea!surf1ng");
++    expect(rows[0].sendInvitation).toBe(false);
++    expect(rows[0].groupNames).toEqual(["Engineering", "Support"]);
++    expect(rows[0].groupIds).toEqual(["11111111-1111-4111-8111-111111111111"]);
++  });
++
++  it("supports quoted commas and defaults role to user", () => {
++    const rows = parseUserCsvImport(
++      [
++        "email,firstname,lastname,groups",
++        '"jane@example.com","Jane, Q.","Doe","All Staff"',
++      ].join("\n"),
++    );
++
++    expect(rows[0].firstname).toBe("Jane, Q.");
++    expect(rows[0].role).toBe(User.UserRoleUser);
++    expect(rows[0].groupNames).toEqual(["All Staff"]);
++  });
++
++  it("rejects missing required headers", () => {
++    expect(() =>
++      parseUserCsvImport("email,firstname\njohn@example.com,John"),
++    ).toThrow("missing_header");
++  });
++});
+diff --git a/ui/src/util/UserCsvImport.ts b/ui/src/util/UserCsvImport.ts
+new file mode 100644
+index 00000000..5f0eb007
+--- /dev/null
++++ b/ui/src/util/UserCsvImport.ts
+@@ -0,0 +1,129 @@
++import User from "@/types/User";
++
++export interface UserCsvImportRow {
++  email: string;
++  firstname: string;
++  lastname: string;
++  role: number;
++  password: string;
++  sendInvitation: boolean;
++  authProviderId: string;
++  organizationId: string;
++  groupIds: string[];
++  groupNames: string[];
++}
++
++function parseCsvLine(line: string): string[] {
++  const result: string[] = [];
++  let current = "";
++  let quoted = false;
++  for (let i = 0; i < line.length; i++) {
++    const ch = line[i];
++    if (ch === '"') {
++      if (quoted && line[i + 1] === '"') {
++        current += '"';
++        i++;
++      } else {
++        quoted = !quoted;
++      }
++    } else if (ch === "," && !quoted) {
++      result.push(current.trim());
++      current = "";
++    } else {
++      current += ch;
++    }
++  }
++  result.push(current.trim());
++  return result;
++}
++
++function splitList(value: string): string[] {
++  if (!value) {
++    return [];
++  }
++  return value
++    .split(";")
++    .map((item) => item.trim())
++    .filter((item) => item !== "");
++}
++
++function parseBool(value: string): boolean {
++  return ["1", "true", "yes", "y"].includes(value.trim().toLowerCase());
++}
++
++function parseRole(value: string): number {
++  const normalized = value.trim().toLowerCase();
++  if (!normalized) {
++    return User.UserRoleUser;
++  }
++  if (/^\d+$/.test(normalized)) {
++    return parseInt(normalized, 10);
++  }
++  if (normalized === "spaceadmin" || normalized === "space_admin") {
++    return User.UserRoleSpaceAdmin;
++  }
++  if (
++    normalized === "orgadmin" ||
++    normalized === "admin" ||
++    normalized === "org_admin"
++  ) {
++    return User.UserRoleOrgAdmin;
++  }
++  if (
++    normalized === "serviceaccountro" ||
++    normalized === "service_account_ro"
++  ) {
++    return User.UserRoleServiceAccountRO;
++  }
++  if (
++    normalized === "serviceaccountrw" ||
++    normalized === "service_account_rw"
++  ) {
++    return User.UserRoleServiceAccountRW;
++  }
++  if (normalized === "superadmin" || normalized === "super_admin") {
++    return User.UserRoleSuperAdmin;
++  }
++  return User.UserRoleUser;
++}
++
++export function parseUserCsvImport(csv: string): UserCsvImportRow[] {
++  const lines = csv
++    .replace(/\r\n/g, "\n")
++    .replace(/\r/g, "\n")
++    .split("\n")
++    .filter((line) => line.trim() !== "");
++  if (lines.length < 2) {
++    throw new Error("missing_rows");
++  }
++  const headers = parseCsvLine(lines[0]).map((header) =>
++    header.trim().toLowerCase(),
++  );
++  const requiredHeaders = ["email", "firstname", "lastname"];
++  requiredHeaders.forEach((header) => {
++    if (!headers.includes(header)) {
++      throw new Error("missing_header");
++    }
++  });
++
++  return lines.slice(1).map((line) => {
++    const values = parseCsvLine(line);
++    const row: { [key: string]: string } = {};
++    headers.forEach((header, idx) => {
++      row[header] = values[idx] || "";
++    });
++    const groupNames = splitList(row.groupnames || row.groups || "");
++    return {
++      email: row.email || "",
++      firstname: row.firstname || "",
++      lastname: row.lastname || "",
++      role: parseRole(row.role || ""),
++      password: row.password || "",
++      sendInvitation: parseBool(row.sendinvitation || ""),
++      authProviderId: row.authproviderid || "",
++      organizationId: row.organizationid || "",
++      groupIds: splitList(row.groupids || ""),
++      groupNames,
++    };
++  });
++}
+-- 
+2.54.0
+

@@ -1,0 +1,426 @@
+From 230e0834bcc0151b47da20dfbdc0cb215a89ad24 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 21:58:12 +0100
+Subject: [PATCH] feat(server): import users from csv
+
+---
+ server/router/test/user-router_test.go | 112 +++++++++++++
+ server/router/user-router.go           | 215 +++++++++++++++++++++----
+ 2 files changed, 297 insertions(+), 30 deletions(-)
+
+diff --git a/server/router/test/user-router_test.go b/server/router/test/user-router_test.go
+index 2e57cbb9..6b0d713c 100644
+--- a/server/router/test/user-router_test.go
++++ b/server/router/test/user-router_test.go
+@@ -371,6 +371,118 @@ func TestUserDuplicateDifferentOrg(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusCreated, res.Code)
+ }
+ 
++func TestUserImportCreatesUsersAndGroupMemberships(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	admin := CreateTestUserOrgAdmin(org)
++	loginResponse := LoginTestUser(admin.ID)
++	group1 := &Group{OrganizationID: org.ID, Name: "Engineering"}
++	group2 := &Group{OrganizationID: org.ID, Name: "Support"}
++	GetGroupRepository().Create(group1)
++	GetGroupRepository().Create(group2)
++
++	username1 := uuid.New().String() + "@test.com"
++	username2 := uuid.New().String() + "@test.com"
++	payload := `{"users":[` +
++		`{"email":"` + username1 + `","firstname":"John","lastname":"Doe","password":"` + TestPassword + `","role":` + strconv.Itoa(int(UserRoleUser)) + `,"groupNames":["Engineering"]},` +
++		`{"email":"` + username2 + `","firstname":"Jane","lastname":"Doe","password":"` + TestPassword + `","role":` + strconv.Itoa(int(UserRoleSpaceAdmin)) + `,"groupIds":["` + group2.ID + `"]}` +
++		`]}`
++	req := NewHTTPRequest("POST", "/user/import", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++
++	var resBody *ImportUsersResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestInt(t, 2, resBody.Created)
++	CheckTestInt(t, 0, resBody.Failed)
++
++	user1, err := GetUserRepository().GetByEmail(org.ID, username1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	user2, err := GetUserRepository().GetByEmail(org.ID, username2)
++	if err != nil {
++		t.Fatal(err)
++	}
++	members1, err := GetGroupRepository().GetMemberUserIDs(group1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	members2, err := GetGroupRepository().GetMemberUserIDs(group2)
++	if err != nil {
++		t.Fatal(err)
++	}
++	CheckTestInt(t, 1, len(members1))
++	CheckTestString(t, user1.ID, members1[0])
++	CheckTestInt(t, 1, len(members2))
++	CheckTestString(t, user2.ID, members2[0])
++}
++
++func TestUserImportForbidden(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserInOrg(org)
++	loginResponse := LoginTestUser(user.ID)
++
++	username := uuid.New().String() + "@test.com"
++	payload := `{"users":[{"email":"` + username + `","firstname":"John","lastname":"Doe","password":"` + TestPassword + `"}]}`
++	req := NewHTTPRequest("POST", "/user/import", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusForbidden, res.Code)
++}
++
++func TestUserImportRejectsForeignOrgGroup(t *testing.T) {
++	ClearTestDB()
++	org1 := CreateTestOrg("test1.com")
++	org2 := CreateTestOrg("test2.com")
++	admin := CreateTestUserOrgAdmin(org1)
++	loginResponse := LoginTestUser(admin.ID)
++	group := &Group{OrganizationID: org2.ID, Name: "Foreign"}
++	GetGroupRepository().Create(group)
++
++	username := uuid.New().String() + "@test1.com"
++	payload := `{"users":[{"email":"` + username + `","firstname":"John","lastname":"Doe","password":"` + TestPassword + `","groupIds":["` + group.ID + `"]}]}`
++	req := NewHTTPRequest("POST", "/user/import", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++
++	var resBody *ImportUsersResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestInt(t, 0, resBody.Created)
++	CheckTestInt(t, 1, resBody.Failed)
++	CheckTestString(t, "invalid_group", resBody.Results[0].Error)
++}
++
++func TestUserImportSuperAdminUsesTargetOrgGroups(t *testing.T) {
++	ClearTestDB()
++	superAdmin := CreateTestUserSuperAdmin()
++	org := CreateTestOrg("target.com")
++	loginResponse := LoginTestUser(superAdmin.ID)
++	group := &Group{OrganizationID: org.ID, Name: "Target Group"}
++	GetGroupRepository().Create(group)
++
++	username := uuid.New().String() + "@target.com"
++	payload := `{"users":[{"email":"` + username + `","firstname":"John","lastname":"Doe","password":"` + TestPassword + `","organizationId":"` + org.ID + `","groupNames":["Target Group"]}]}`
++	req := NewHTTPRequest("POST", "/user/import", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++
++	var resBody *ImportUsersResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestInt(t, 1, resBody.Created)
++	CheckTestInt(t, 0, resBody.Failed)
++	user, err := GetUserRepository().GetByEmail(org.ID, username)
++	if err != nil {
++		t.Fatal(err)
++	}
++	members, err := GetGroupRepository().GetMemberUserIDs(group)
++	if err != nil {
++		t.Fatal(err)
++	}
++	CheckTestInt(t, 1, len(members))
++	CheckTestString(t, user.ID, members[0])
++}
++
+ func TestUserUpdateCreatesDuplicate(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/user-router.go b/server/router/user-router.go
+index 6aaf3f20..ec1f0414 100644
+--- a/server/router/user-router.go
++++ b/server/router/user-router.go
+@@ -74,6 +74,30 @@ type CreateUserRequest struct {
+ 	OrganizationID string `json:"organizationId"`
+ }
+ 
++type ImportUserRequest struct {
++	CreateUserRequest
++	GroupIDs   []string `json:"groupIds" validate:"dive,uuid4"`
++	GroupNames []string `json:"groupNames" validate:"dive,min=1,max=256"`
++}
++
++type ImportUsersRequest struct {
++	Users []*ImportUserRequest `json:"users" validate:"required,min=1,max=100,dive"`
++}
++
++type ImportUserResult struct {
++	Row    int    `json:"row"`
++	ID     string `json:"id"`
++	Email  string `json:"email"`
++	Status string `json:"status"`
++	Error  string `json:"error"`
++}
++
++type ImportUsersResponse struct {
++	Created int                 `json:"created"`
++	Failed  int                 `json:"failed"`
++	Results []*ImportUserResult `json:"results"`
++}
++
+ type GetUserResponse struct {
+ 	ID              string                  `json:"id"`
+ 	Organization    GetOrganizationResponse `json:"organization"`
+@@ -166,6 +190,7 @@ func (router *UserRouter) SetupRoutes(s *mux.Router) {
+ 	s.HandleFunc("/count", router.getCount).Methods("GET")
+ 	s.HandleFunc("/session", router.getActiveSessions).Methods("GET")
+ 	s.HandleFunc("/me", router.getSelf).Methods("GET")
++	s.HandleFunc("/import", router.importUsers).Methods("POST")
+ 	s.HandleFunc("/{id}", router.getOne).Methods("GET")
+ 	s.HandleFunc("/byEmail/{email}", router.getOneByEmail).Methods("GET")
+ 	s.HandleFunc("/{id}/password", router.setPassword).Methods("PUT")
+@@ -813,67 +838,126 @@ func (router *UserRouter) create(w http.ResponseWriter, r *http.Request) {
+ 		SendBadRequest(w)
+ 		return
+ 	}
+-	if m.OrganizationID != "" && m.OrganizationID != user.OrganizationID && !GetUserRepository().IsSuperAdmin(user) {
++
++	e, statusCode, appCode := router.createUser(user, &m)
++	if statusCode != http.StatusCreated {
++		router.sendCreateUserError(w, statusCode, appCode)
++		return
++	}
++
++	SendCreated(w, e.ID)
++}
++
++func (router *UserRouter) importUsers(w http.ResponseWriter, r *http.Request) {
++	user := GetRequestUser(r)
++	if !CanAdminOrg(user, user.OrganizationID) {
+ 		SendForbidden(w)
+ 		return
+ 	}
+-	targetOrgID := user.OrganizationID
+-	if m.OrganizationID != "" && GetUserRepository().IsSuperAdmin(user) {
+-		targetOrgID = m.OrganizationID
++	var m ImportUsersRequest
++	if UnmarshalValidateBody(r, &m) != nil {
++		SendBadRequest(w)
++		return
+ 	}
++
++	res := &ImportUsersResponse{}
++	for idx, importUser := range m.Users {
++		row := idx + 2
++		result := &ImportUserResult{
++			Row:   row,
++			Email: importUser.Email,
++		}
++		targetOrganizationID := router.getCreateUserTargetOrganizationID(user, &importUser.CreateUserRequest)
++		groups, errText := router.resolveImportUserGroups(targetOrganizationID, importUser)
++		if errText != "" {
++			result.Status = "failed"
++			result.Error = errText
++			res.Failed++
++			res.Results = append(res.Results, result)
++			continue
++		}
++
++		createdUser, statusCode, appCode := router.createUser(user, &importUser.CreateUserRequest)
++		if statusCode != http.StatusCreated {
++			result.Status = "failed"
++			result.Error = router.createUserImportError(statusCode, appCode)
++			res.Failed++
++			res.Results = append(res.Results, result)
++			continue
++		}
++		membershipFailed := false
++		for _, group := range groups {
++			if err := GetGroupRepository().AddMembers(group, []string{createdUser.ID}); err != nil {
++				log.Println(err)
++				result.Status = "failed"
++				result.Error = "group_membership_failed"
++				res.Failed++
++				res.Results = append(res.Results, result)
++				membershipFailed = true
++				break
++			}
++		}
++		if membershipFailed {
++			continue
++		}
++		result.ID = createdUser.ID
++		result.Status = "created"
++		res.Created++
++		res.Results = append(res.Results, result)
++	}
++
++	SendJSON(w, res)
++}
++
++func (router *UserRouter) createUser(requestUser *User, m *CreateUserRequest) (*User, int, int) {
++	if m.OrganizationID != "" && m.OrganizationID != requestUser.OrganizationID && !GetUserRepository().IsSuperAdmin(requestUser) {
++		return nil, http.StatusForbidden, 0
++	}
++	targetOrgID := router.getCreateUserTargetOrganizationID(requestUser, m)
+ 	allowPlainUsername, _ := GetSettingsRepository().GetBool(targetOrgID, SettingAllowPlainUsername.Name)
+ 	if !isServiceAccountRole(m.Role) && !isValidUserIdentifier(m.Email, allowPlainUsername) {
+-		SendBadRequest(w)
+-		return
++		return nil, http.StatusBadRequest, 0
+ 	}
+ 
+ 	if m.Password != "" && !ValidatePassword(m.Password) {
+-		SendBadRequest(w)
+-		return
++		return nil, http.StatusBadRequest, 0
+ 	}
+ 
+ 	if m.AuthProviderID != "" {
+ 		if !ValidateGUID(m.AuthProviderID) {
+-			SendBadRequest(w)
+-			return
++			return nil, http.StatusBadRequest, 0
+ 		}
+ 		authProvider, _ := GetAuthProviderRepository().GetOneByOrgId(m.AuthProviderID, targetOrgID)
+ 		if authProvider == nil {
+-			SendBadRequest(w)
+-			return
++			return nil, http.StatusBadRequest, 0
+ 		}
+ 	}
+ 
+-	e := router.copyFromRestModel(&m)
+-	if e.OrganizationID == "" || !GetUserRepository().IsSuperAdmin(user) {
+-		e.OrganizationID = user.OrganizationID
++	e := router.copyFromRestModel(m)
++	if e.OrganizationID == "" || !GetUserRepository().IsSuperAdmin(requestUser) {
++		e.OrganizationID = requestUser.OrganizationID
+ 	}
+-	if e.Role > user.Role && e.Role != UserRoleServiceAccountRO && e.Role != UserRoleServiceAccountRW {
++	if e.Role > requestUser.Role && e.Role != UserRoleServiceAccountRO && e.Role != UserRoleServiceAccountRW {
+ 		e.Role = UserRoleUser
+ 	}
+ 	org, err := GetOrganizationRepository().GetOne(e.OrganizationID)
+ 	if err != nil {
+ 		log.Println(err)
+-		SendInternalServerError(w)
+-		return
++		return nil, http.StatusInternalServerError, 0
+ 	}
+ 	if !GetUserRepository().CanCreateUser(org) {
+-		SendPaymentRequired(w)
+-		return
++		return nil, http.StatusPaymentRequired, 0
+ 	}
+ 	existingUser, err := GetUserRepository().GetByEmail(e.OrganizationID, e.Email)
+ 	if err == nil && existingUser != nil {
+-		SendAlreadyExistsCode(w, ResponseCodeUserAlreadyExists)
+-		return
++		return nil, http.StatusConflict, ResponseCodeUserAlreadyExists
+ 	}
+ 	if m.SendInvitation && !areMailFeaturesEnabled(e.OrganizationID) {
+-		SendForbidden(w)
+-		return
++		return nil, http.StatusForbidden, 0
+ 	}
+ 	if err := GetUserRepository().Create(e); err != nil {
+ 		log.Println(err)
+-		SendInternalServerError(w)
+-		return
++		return nil, http.StatusInternalServerError, 0
+ 	}
+ 
+ 	// Send invitation email if requested
+@@ -886,18 +970,89 @@ func (router *UserRouter) create(w http.ResponseWriter, r *http.Request) {
+ 		}
+ 		if err := GetAuthStateRepository().Create(authState); err != nil {
+ 			log.Println("Failed to create auth state for user invitation:", err)
+-			SendInternalServerError(w)
+-			return
++			return nil, http.StatusInternalServerError, 0
+ 		}
+ 		authRouter := &AuthRouter{}
+ 		if err := authRouter.SendUserInvitationEmail(e, authState.ID, org); err != nil {
+ 			log.Printf("User invitation email failed: %s\n", err)
+-			SendInternalServerError(w)
++			return nil, http.StatusInternalServerError, 0
++		}
++	}
++
++	return e, http.StatusCreated, 0
++}
++
++func (router *UserRouter) getCreateUserTargetOrganizationID(requestUser *User, m *CreateUserRequest) string {
++	if m.OrganizationID != "" && GetUserRepository().IsSuperAdmin(requestUser) {
++		return m.OrganizationID
++	}
++	return requestUser.OrganizationID
++}
++
++func (router *UserRouter) resolveImportUserGroups(organizationID string, m *ImportUserRequest) ([]*Group, string) {
++	groupsByID := map[string]*Group{}
++	for _, groupID := range m.GroupIDs {
++		if _, exists := groupsByID[groupID]; exists {
++			continue
++		}
++		group, err := GetGroupRepository().GetOne(groupID)
++		if err != nil || group.OrganizationID != organizationID {
++			return nil, "invalid_group"
++		}
++		groupsByID[group.ID] = group
++	}
++	for _, groupName := range m.GroupNames {
++		group, err := GetGroupRepository().GetByName(organizationID, strings.TrimSpace(groupName))
++		if err != nil {
++			return nil, "invalid_group"
++		}
++		groupsByID[group.ID] = group
++	}
++	groups := []*Group{}
++	for _, group := range groupsByID {
++		groups = append(groups, group)
++	}
++	return groups, ""
++}
++
++func (router *UserRouter) sendCreateUserError(w http.ResponseWriter, statusCode int, appCode int) {
++	if statusCode == http.StatusBadRequest {
++		SendBadRequest(w)
++		return
++	}
++	if statusCode == http.StatusForbidden {
++		SendForbidden(w)
++		return
++	}
++	if statusCode == http.StatusPaymentRequired {
++		SendPaymentRequired(w)
++		return
++	}
++	if statusCode == http.StatusConflict {
++		if appCode != 0 {
++			SendAlreadyExistsCode(w, appCode)
+ 			return
+ 		}
++		SendAlreadyExists(w)
++		return
+ 	}
++	SendInternalServerError(w)
++}
+ 
+-	SendCreated(w, e.ID)
++func (router *UserRouter) createUserImportError(statusCode int, appCode int) string {
++	if statusCode == http.StatusConflict && appCode == ResponseCodeUserAlreadyExists {
++		return "user_already_exists"
++	}
++	if statusCode == http.StatusBadRequest {
++		return "invalid_user"
++	}
++	if statusCode == http.StatusForbidden {
++		return "forbidden"
++	}
++	if statusCode == http.StatusPaymentRequired {
++		return "user_limit_exceeded"
++	}
++	return "internal_error"
+ }
+ 
+ func (router *UserRouter) copyFromRestModel(m *CreateUserRequest) *User {
+-- 
+2.54.0
+

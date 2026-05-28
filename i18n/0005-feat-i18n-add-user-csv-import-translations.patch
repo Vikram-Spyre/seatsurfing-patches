@@ -1,0 +1,393 @@
+From ce040d8f405e1aa74ce75d0efcbd5f1cbb21fabd Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 22:01:27 +0100
+Subject: [PATCH] feat(i18n): add user csv import translations
+
+---
+ ui/i18n/translations.de.json    | 15 ++++++++++++++-
+ ui/i18n/translations.en-GB.json | 13 +++++++++++++
+ ui/i18n/translations.en-US.json | 15 ++++++++++++++-
+ ui/i18n/translations.es.json    | 15 ++++++++++++++-
+ ui/i18n/translations.et.json    | 15 ++++++++++++++-
+ ui/i18n/translations.fi.json    | 15 ++++++++++++++-
+ ui/i18n/translations.fr.json    | 15 ++++++++++++++-
+ ui/i18n/translations.he.json    | 15 ++++++++++++++-
+ ui/i18n/translations.hu.json    | 15 ++++++++++++++-
+ ui/i18n/translations.it.json    | 15 ++++++++++++++-
+ ui/i18n/translations.nl.json    | 15 ++++++++++++++-
+ ui/i18n/translations.pl.json    | 15 ++++++++++++++-
+ ui/i18n/translations.pt.json    | 15 ++++++++++++++-
+ ui/i18n/translations.ro.json    | 15 ++++++++++++++-
+ ui/i18n/translations.zh-TW.json | 15 ++++++++++++++-
+ 15 files changed, 209 insertions(+), 14 deletions(-)
+
+diff --git a/ui/i18n/translations.de.json b/ui/i18n/translations.de.json
+index 95070ab5..19b5bfec 100644
+--- a/ui/i18n/translations.de.json
++++ b/ui/i18n/translations.de.json
+@@ -484,5 +484,18 @@
+   "sponsorLink": "Sponsor werden",
+   "shapeRect": "Rechteck",
+   "shapeCircle": "Kreis/Oval",
+-  "featuresLink": "Funktionen vergleichen"
++  "featuresLink": "Funktionen vergleichen",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.en-GB.json b/ui/i18n/translations.en-GB.json
+index ad8a2ec2..9f26e127 100644
+--- a/ui/i18n/translations.en-GB.json
++++ b/ui/i18n/translations.en-GB.json
+@@ -117,6 +117,7 @@
+   "domains": "Domains",
+   "download": "Download",
+   "duplicate": "Duplicate",
++  "importCsv": "Import CSV",
+   "earliestPossible": "Earliest possible",
+   "edit": "Edit",
+   "editArea": "Edit area",
+@@ -330,6 +331,18 @@
+   "userinfoLastnameField": "Userinfo Lastname field",
+   "username": "Username",
+   "users": "Users",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportRow": "Row",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded.",
+   "utilization": "Utilization",
+   "validEmailRequired": "Valid email required",
+   "verification": "Verification",
+diff --git a/ui/i18n/translations.en-US.json b/ui/i18n/translations.en-US.json
+index 526ce3b4..1b2f1df9 100644
+--- a/ui/i18n/translations.en-US.json
++++ b/ui/i18n/translations.en-US.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.es.json b/ui/i18n/translations.es.json
+index 989f72a4..11a85d47 100644
+--- a/ui/i18n/translations.es.json
++++ b/ui/i18n/translations.es.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.et.json b/ui/i18n/translations.et.json
+index 3ddb2e93..8d6efebf 100644
+--- a/ui/i18n/translations.et.json
++++ b/ui/i18n/translations.et.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.fi.json b/ui/i18n/translations.fi.json
+index dc44a550..e22954c8 100644
+--- a/ui/i18n/translations.fi.json
++++ b/ui/i18n/translations.fi.json
+@@ -481,5 +481,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.fr.json b/ui/i18n/translations.fr.json
+index ccbbc40c..6d209ffc 100644
+--- a/ui/i18n/translations.fr.json
++++ b/ui/i18n/translations.fr.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.he.json b/ui/i18n/translations.he.json
+index 17ccc4a3..e9cb9a6d 100644
+--- a/ui/i18n/translations.he.json
++++ b/ui/i18n/translations.he.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.hu.json b/ui/i18n/translations.hu.json
+index 72d90099..f1b6d399 100644
+--- a/ui/i18n/translations.hu.json
++++ b/ui/i18n/translations.hu.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.it.json b/ui/i18n/translations.it.json
+index 348c98cd..f9a65af2 100644
+--- a/ui/i18n/translations.it.json
++++ b/ui/i18n/translations.it.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.nl.json b/ui/i18n/translations.nl.json
+index ff5616d4..55b99b7a 100644
+--- a/ui/i18n/translations.nl.json
++++ b/ui/i18n/translations.nl.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.pl.json b/ui/i18n/translations.pl.json
+index aae6babc..5e08dc9c 100644
+--- a/ui/i18n/translations.pl.json
++++ b/ui/i18n/translations.pl.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.pt.json b/ui/i18n/translations.pt.json
+index 50830a08..ffcb17f4 100644
+--- a/ui/i18n/translations.pt.json
++++ b/ui/i18n/translations.pt.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.ro.json b/ui/i18n/translations.ro.json
+index 60ad126d..15d9b764 100644
+--- a/ui/i18n/translations.ro.json
++++ b/ui/i18n/translations.ro.json
+@@ -483,5 +483,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+diff --git a/ui/i18n/translations.zh-TW.json b/ui/i18n/translations.zh-TW.json
+index db467c1f..70de5c06 100644
+--- a/ui/i18n/translations.zh-TW.json
++++ b/ui/i18n/translations.zh-TW.json
+@@ -481,5 +481,18 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "importCsv": "Import CSV",
++  "userCsvImportError": "CSV import failed.",
++  "userCsvImportFailed": "users failed.",
++  "userCsvImportInvalid": "Invalid CSV file. Required headers: email, firstname, lastname.",
++  "userCsvImportSuccess": "users imported.",
++  "userCsvImportForbidden": "Insufficient permissions.",
++  "userCsvImportGroupMembershipFailed": "Group membership could not be saved.",
++  "userCsvImportInternalError": "Internal error.",
++  "userCsvImportInvalidGroup": "Group not found in this organization.",
++  "userCsvImportInvalidUser": "Invalid user data.",
++  "userCsvImportRow": "Row",
++  "userCsvImportUserAlreadyExists": "User already exists.",
++  "userCsvImportUserLimitExceeded": "User limit exceeded."
+ }
+-- 
+2.54.0
+
