@@ -1,0 +1,258 @@
+From 8fc50af6057f259f0d73a5e34e8d6e93ec00b1b0 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Thu, 28 May 2026 13:53:10 +0100
+Subject: [PATCH] feat(server): add booking creation lock
+
+---
+ server/repository/settings-repository.go      |  4 ++-
+ server/router/booking-router.go               | 13 +++++++
+ server/router/recurring-booking-router.go     | 12 +++++--
+ server/router/routes.go                       |  5 +--
+ server/router/settings-router.go              |  5 +++
+ server/router/test/booking-router_test.go     | 16 +++++++++
+ .../test/recurring-booking-router_test.go     | 34 +++++++++++++++++++
+ server/router/test/settings-router_test.go    |  1 +
+ 8 files changed, 85 insertions(+), 5 deletions(-)
+
+diff --git a/server/repository/settings-repository.go b/server/repository/settings-repository.go
+index 9b5c754c..0298188e 100644
+--- a/server/repository/settings-repository.go
++++ b/server/repository/settings-repository.go
+@@ -73,6 +73,7 @@ var (
+ 	SettingHideReports                    SettingName = SettingName{Name: "hide_reports", Type: SettingTypeBool}
+ 	SettingHideStats                      SettingName = SettingName{Name: "hide_stats", Type: SettingTypeBool}
+ 	SettingWeeklyBookingWindowPolicy      SettingName = SettingName{Name: "weekly_booking_window_policy", Type: SettingTypeBool}
++	SettingDisableBookingCreation         SettingName = SettingName{Name: "disable_booking_creation", Type: SettingTypeBool}
+ )
+ 
+ var settingsRepository *SettingsRepository
+@@ -310,7 +311,8 @@ func (r *SettingsRepository) InitDefaultSettingsForOrg(organizationID string) er
+ 		"($1, '"+SettingEnforceTOTP.Name+"', '0'), "+
+ 		"($1, '"+SettingKioskModeEnabled.Name+"', '0'), "+
+ 		"($1, '"+SettingHideReports.Name+"', '0'), "+
+-		"($1, '"+SettingHideStats.Name+"', '0') "+
++		"($1, '"+SettingHideStats.Name+"', '0'), "+
++		"($1, '"+SettingDisableBookingCreation.Name+"', '0') "+
+ 		"ON CONFLICT (organization_id, name) DO NOTHING",
+ 		organizationID)
+ 	return err
+diff --git a/server/router/booking-router.go b/server/router/booking-router.go
+index 31a7d917..bf139997 100644
+--- a/server/router/booking-router.go
++++ b/server/router/booking-router.go
+@@ -550,6 +550,10 @@ func (router *BookingRouter) preBookingCreateCheck(w http.ResponseWriter, r *htt
+ 		SendForbidden(w)
+ 		return
+ 	}
++	if router.isBookingCreationDisabled(location.OrganizationID) {
++		SendBadRequestCode(w, ResponseCodeBookingCreationDisabled)
++		return
++	}
+ 	enterNew, err := GetLocationRepository().AttachTimezoneInformation(m.Enter, location)
+ 	if err != nil {
+ 		SendInternalServerError(w)
+@@ -602,6 +606,10 @@ func (router *BookingRouter) create(w http.ResponseWriter, r *http.Request) {
+ 		SendForbidden(w)
+ 		return
+ 	}
++	if router.isBookingCreationDisabled(location.OrganizationID) {
++		SendBadRequestCode(w, ResponseCodeBookingCreationDisabled)
++		return
++	}
+ 
+ 	// test if location and space is enabled or user is space admin
+ 	if (!location.Enabled || !space.Enabled) && !CanSpaceAdminOrg(requestUser, location.OrganizationID) {
+@@ -713,6 +721,11 @@ func (router *BookingRouter) bookForUser(requestUser *User, userEmail string, w
+ 	return bookForUser.ID, nil
+ }
+ 
++func (router *BookingRouter) isBookingCreationDisabled(orgID string) bool {
++	disabled, _ := GetSettingsRepository().GetBool(orgID, SettingDisableBookingCreation.Name)
++	return disabled
++}
++
+ func (router *BookingRouter) getPresenceReport(w http.ResponseWriter, r *http.Request) {
+ 	user := GetRequestUser(r)
+ 	if !CanSpaceAdminOrg(user, user.OrganizationID) {
+diff --git a/server/router/recurring-booking-router.go b/server/router/recurring-booking-router.go
+index 7e81f2d7..35a8dc77 100644
+--- a/server/router/recurring-booking-router.go
++++ b/server/router/recurring-booking-router.go
+@@ -72,6 +72,11 @@ func (router *RecurringBookingRouter) preBookingCreateCheck(w http.ResponseWrite
+ 		SendForbidden(w)
+ 		return
+ 	}
++	bookingRouter := &BookingRouter{}
++	if bookingRouter.isBookingCreationDisabled(location.OrganizationID) {
++		SendBadRequestCode(w, ResponseCodeBookingCreationDisabled)
++		return
++	}
+ 	featureRecurringBookings, _ := GetSettingsRepository().GetBool(requestUser.OrganizationID, SettingFeatureRecurringBookings.Name)
+ 	if !featureRecurringBookings {
+ 		SendPaymentRequired(w)
+@@ -82,7 +87,6 @@ func (router *RecurringBookingRouter) preBookingCreateCheck(w http.ResponseWrite
+ 		SendInternalServerError(w)
+ 		return
+ 	}
+-	bookingRouter := &BookingRouter{}
+ 	bookings, err := GetRecurringBookingRepository().CreateBookings(e)
+ 	if err != nil {
+ 		SendBadRequest(w)
+@@ -221,6 +225,11 @@ func (router *RecurringBookingRouter) create(w http.ResponseWriter, r *http.Requ
+ 		SendForbidden(w)
+ 		return
+ 	}
++	bookingRouter := &BookingRouter{}
++	if bookingRouter.isBookingCreationDisabled(location.OrganizationID) {
++		SendBadRequestCode(w, ResponseCodeBookingCreationDisabled)
++		return
++	}
+ 	featureRecurringBookings, _ := GetSettingsRepository().GetBool(requestUser.OrganizationID, SettingFeatureRecurringBookings.Name)
+ 	if !featureRecurringBookings {
+ 		SendPaymentRequired(w)
+@@ -237,7 +246,6 @@ func (router *RecurringBookingRouter) create(w http.ResponseWriter, r *http.Requ
+ 		SendInternalServerError(w)
+ 		return
+ 	}
+-	bookingRouter := &BookingRouter{}
+ 	spaceRequiresApproval := bookingRouter.getSpaceRequiresApproval(location.OrganizationID, space)
+ 	bookings, err := GetRecurringBookingRepository().CreateBookings(e)
+ 	if err != nil {
+diff --git a/server/router/routes.go b/server/router/routes.go
+index bb8d490a..2d3a7f52 100644
+--- a/server/router/routes.go
++++ b/server/router/routes.go
+@@ -50,13 +50,14 @@ var (
+ 	ResponseCodeBookingSubjectRequired           = 1010
+ 	ResponseCodeBookingInPast                    = 1011
+ 	ResponseCodeBookingInvalidSubject            = 1012
++	ResponseCodeBookingCreationDisabled          = 1013
+ 
+ 	ResponseCodePresenceReportDateRangeTooLong = 2001
+ 
+ 	ResponseCodeUserAlreadyExists = 3001
+ 
+-	ResponseCodeGroupNameAlreadyExists  = 4001
+-	ResponseCodeGroupInvalidParent      = 4002
++	ResponseCodeGroupNameAlreadyExists = 4001
++	ResponseCodeGroupInvalidParent     = 4002
+ 
+ 	ResponseCodePasswordUpdateRequired = 5001
+ 
+diff --git a/server/router/settings-router.go b/server/router/settings-router.go
+index 7cbdb300..4724a96e 100644
+--- a/server/router/settings-router.go
++++ b/server/router/settings-router.go
+@@ -300,6 +300,7 @@ func (router *SettingsRouter) isValidSettingNameReadPublic(name string) bool {
+ 		name == SettingHideReports.Name ||
+ 		name == SettingHideStats.Name ||
+ 		name == SettingWeeklyBookingWindowPolicy.Name ||
++		name == SettingDisableBookingCreation.Name ||
+ 		name == SettingAllowRecurringBookings.Name {
+ 		return true
+ 	}
+@@ -364,6 +365,7 @@ func (router *SettingsRouter) isValidSettingNameWrite(name string) bool {
+ 		name == SettingHideReports.Name ||
+ 		name == SettingHideStats.Name ||
+ 		name == SettingWeeklyBookingWindowPolicy.Name ||
++		name == SettingDisableBookingCreation.Name ||
+ 		name == SettingSubjectDefault.Name ||
+ 		name == SettingTargetUtilizationHoursPerWeek.Name ||
+ 		name == SettingKioskSecret.Name ||
+@@ -473,6 +475,9 @@ func (router *SettingsRouter) getSettingType(name string) SettingType {
+ 	if name == SettingWeeklyBookingWindowPolicy.Name {
+ 		return SettingWeeklyBookingWindowPolicy.Type
+ 	}
++	if name == SettingDisableBookingCreation.Name {
++		return SettingDisableBookingCreation.Type
++	}
+ 	if name == SettingSubjectDefault.Name {
+ 		return SettingSubjectDefault.Type
+ 	}
+diff --git a/server/router/test/booking-router_test.go b/server/router/test/booking-router_test.go
+index d6548b03..11f03e59 100644
+--- a/server/router/test/booking-router_test.go
++++ b/server/router/test/booking-router_test.go
+@@ -152,6 +152,22 @@ func TestCannotCreateBookingInDisabledSpace(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
+ }
+ 
++func TestCannotCreateBookingWhenBookingCreationDisabled(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserInOrg(org)
++	loginResponse := LoginTestUser(user.ID)
++	_, space := CreateTestLocationAndSpace(org)
++	GetSettingsRepository().Set(org.ID, SettingMaxDaysInAdvance.Name, "5000")
++	GetSettingsRepository().Set(org.ID, SettingDisableBookingCreation.Name, "1")
++
++	payload := "{\"spaceId\": \"" + space.ID + "\", \"enter\": \"2030-09-01T08:30:00Z\", \"leave\": \"2030-09-01T17:00:00Z\", \"subject\": \"Test Event\"}"
++	req := NewHTTPRequest("POST", "/booking/", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
++	CheckTestString(t, strconv.Itoa(ResponseCodeBookingCreationDisabled), res.Header().Get("X-Error-Code"))
++}
++
+ func TestBookingsSubjectRequired(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/test/recurring-booking-router_test.go b/server/router/test/recurring-booking-router_test.go
+index dc6177aa..0b8f19ef 100644
+--- a/server/router/test/recurring-booking-router_test.go
++++ b/server/router/test/recurring-booking-router_test.go
+@@ -76,6 +76,40 @@ func TestRecurringBookingsCreateFeatureDisabled(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusPaymentRequired, res.Code)
+ }
+ 
++func TestRecurringBookingsCreateBookingCreationDisabled(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	GetSettingsRepository().Set(org.ID, SettingFeatureRecurringBookings.Name, "1")
++	GetSettingsRepository().Set(org.ID, SettingMaxDaysInAdvance.Name, strconv.Itoa(365*10))
++	GetSettingsRepository().Set(org.ID, SettingMaxBookingsPerUser.Name, "1000")
++	GetSettingsRepository().Set(org.ID, SettingDisableBookingCreation.Name, "1")
++	user1 := CreateTestUserInOrg(org)
++
++	l := &Location{
++		Name:                  "Test",
++		MaxConcurrentBookings: 2,
++		OrganizationID:        org.ID,
++		Enabled:               true,
++	}
++	GetLocationRepository().Create(l)
++	s1 := &Space{Name: "Test 1", LocationID: l.ID, Enabled: true}
++	GetSpaceRepository().Create(s1)
++
++	payload := `{
++	"spaceId": "` + s1.ID + `",
++	"subject": "Test",
++	"enter": "2030-08-28T09:00:00+02:00",
++	"leave": "2030-08-28T15:00:00+02:00",
++	"end": "2030-09-03T00:00:00+02:00",
++	"cadence": 1,
++	"cycle": 1
++	}`
++	req := NewHTTPRequest("POST", "/recurring-booking/", user1.ID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
++	CheckTestString(t, strconv.Itoa(ResponseCodeBookingCreationDisabled), res.Header().Get("X-Error-Code"))
++}
++
+ func TestRecurringBookingsPrecheck(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/test/settings-router_test.go b/server/router/test/settings-router_test.go
+index 9f86c09e..49ede137 100644
+--- a/server/router/test/settings-router_test.go
++++ b/server/router/test/settings-router_test.go
+@@ -177,6 +177,7 @@ func TestSettingsReadAdmin(t *testing.T) {
+ 		SettingHideReports.Name,
+ 		SettingHideStats.Name,
+ 		SettingWeeklyBookingWindowPolicy.Name,
++		SettingDisableBookingCreation.Name,
+ 	}
+ 	forbiddenSettings := []string{
+ 		SettingDatabaseVersion.Name,
+-- 
+2.54.0
+

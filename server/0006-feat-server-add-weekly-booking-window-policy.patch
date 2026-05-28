@@ -1,0 +1,288 @@
+From 0f809fbe6e3b5a804999d57225f4ef1daa945dd5 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Thu, 28 May 2026 13:47:07 +0100
+Subject: [PATCH] feat(server): add weekly booking window policy
+
+---
+ server/repository/settings-repository.go   |  1 +
+ server/router/booking-router.go            | 81 ++++++++++++++++++++--
+ server/router/recurring-booking-router.go  |  6 +-
+ server/router/settings-router.go           |  5 ++
+ server/router/test/booking-router_test.go  | 81 ++++++++++++++++++++++
+ server/router/test/settings-router_test.go |  1 +
+ 6 files changed, 169 insertions(+), 6 deletions(-)
+
+diff --git a/server/repository/settings-repository.go b/server/repository/settings-repository.go
+index 7c98841a..9b5c754c 100644
+--- a/server/repository/settings-repository.go
++++ b/server/repository/settings-repository.go
+@@ -72,6 +72,7 @@ var (
+ 	SettingFeatureKioskMode               SettingName = SettingName{Name: "feature_kiosk_mode", Type: SettingTypeBool}
+ 	SettingHideReports                    SettingName = SettingName{Name: "hide_reports", Type: SettingTypeBool}
+ 	SettingHideStats                      SettingName = SettingName{Name: "hide_stats", Type: SettingTypeBool}
++	SettingWeeklyBookingWindowPolicy      SettingName = SettingName{Name: "weekly_booking_window_policy", Type: SettingTypeBool}
+ )
+ 
+ var settingsRepository *SettingsRepository
+diff --git a/server/router/booking-router.go b/server/router/booking-router.go
+index ea341f48..31a7d917 100644
+--- a/server/router/booking-router.go
++++ b/server/router/booking-router.go
+@@ -650,7 +650,11 @@ func (router *BookingRouter) create(w http.ResponseWriter, r *http.Request) {
+ 		SendAlreadyExistsCode(w, ResponseCodeBookingSlotConflict)
+ 		return
+ 	}
+-	e.Approved = !router.getSpaceRequiresApproval(location.OrganizationID, space)
++	e.Approved = router.isBookingApprovedOnCreate(
++		router.getSpaceRequiresApproval(location.OrganizationID, space),
++		&bookingReq.BookingRequest,
++		location.OrganizationID,
++		requestUser)
+ 	if err := GetBookingRepository().Create(e); err != nil {
+ 		log.Println(err)
+ 		SendInternalServerError(w)
+@@ -844,19 +848,86 @@ func (router *BookingRouter) IsValidBookingAdvance(m *BookingRequest, orgID stri
+ 		return false, ResponseCodeBookingInPast
+ 	}
+ 	advanceDays := math.Floor(m.Enter.Sub(now).Hours() / 24)
+-	if advanceDays >= 0 && noAdminRestrictions && CanSpaceAdminOrg(user, orgID) {
+-		return true, 0
+-	}
+-
+ 	if advanceDays < 0 {
+ 		return false, ResponseCodeBookingInPast
+ 	}
++	if valid, code, _ := router.IsValidWeeklyBookingWindow(m, orgID, user, time.Now().UTC()); !valid {
++		return false, code
++	}
++	if advanceDays >= 0 && noAdminRestrictions && CanSpaceAdminOrg(user, orgID) {
++		return true, 0
++	}
+ 	if advanceDays > float64(maxAdvanceDays) {
+ 		return false, ResponseCodeBookingTooManyDaysInAdvance
+ 	}
+ 	return true, 0
+ }
+ 
++func (router *BookingRouter) IsValidWeeklyBookingWindow(m *BookingRequest, orgID string, user *User, now time.Time) (bool, int, bool) {
++	enabled, _ := GetSettingsRepository().GetBool(orgID, SettingWeeklyBookingWindowPolicy.Name)
++	if !enabled {
++		return true, 0, false
++	}
++
++	weekOffset, weekday, ok := router.getWeeklyBookingWindowOffset(m.Enter, orgID, now)
++	if !ok {
++		return false, ResponseCodeBookingTooManyDaysInAdvance, false
++	}
++	isEarlyWeek := weekday >= time.Monday && weekday <= time.Wednesday
++	isSpaceAdmin := CanSpaceAdminOrg(user, orgID)
++
++	if weekOffset == 0 {
++		return true, 0, false
++	}
++	if isEarlyWeek {
++		if isSpaceAdmin && weekOffset <= 2 {
++			return true, 0, true
++		}
++		return false, ResponseCodeBookingTooManyDaysInAdvance, false
++	}
++	if weekOffset == 1 {
++		return true, 0, false
++	}
++	return false, ResponseCodeBookingTooManyDaysInAdvance, false
++}
++
++func (router *BookingRouter) isBookingApprovedOnCreate(spaceRequiresApproval bool, m *BookingRequest, orgID string, user *User) bool {
++	weeklyPolicyEnabled, _ := GetSettingsRepository().GetBool(orgID, SettingWeeklyBookingWindowPolicy.Name)
++	if weeklyPolicyEnabled {
++		valid, _, requiresApproval := router.IsValidWeeklyBookingWindow(m, orgID, user, time.Now().UTC())
++		return valid && !requiresApproval
++	}
++	return !spaceRequiresApproval
++}
++
++func (router *BookingRouter) getWeeklyBookingWindowOffset(enter time.Time, orgID string, now time.Time) (int, time.Weekday, bool) {
++	tz, err := GetSettingsRepository().Get(orgID, SettingDefaultTimezone.Name)
++	if err != nil || tz == "" {
++		tz = "UTC"
++	}
++	loc, err := time.LoadLocation(tz)
++	if err != nil {
++		loc = time.UTC
++	}
++
++	nowLocal := now.In(loc)
++	enterLocal := enter.In(loc)
++	nowWeekStart := router.getWeekStart(nowLocal)
++	enterWeekStart := router.getWeekStart(enterLocal)
++	diffHours := enterWeekStart.Sub(nowWeekStart).Hours()
++	weekOffset := int(math.Floor(diffHours / (24 * 7)))
++	if weekOffset < 0 {
++		return weekOffset, nowLocal.Weekday(), false
++	}
++	return weekOffset, nowLocal.Weekday(), true
++}
++
++func (router *BookingRouter) getWeekStart(t time.Time) time.Time {
++	dayOffset := (int(t.Weekday()) + 6) % 7
++	year, month, day := t.Date()
++	return time.Date(year, month, day-dayOffset, 0, 0, 0, 0, t.Location())
++}
++
+ func (router *BookingRouter) IsValidMaxUpcomingBookings(orgID string, user *User, upcomingBookingsMarkup int) bool {
+ 	noAdminRestrictions, _ := GetSettingsRepository().GetBool(orgID, SettingNoAdminRestrictions.Name)
+ 	if noAdminRestrictions && CanSpaceAdminOrg(user, orgID) {
+diff --git a/server/router/recurring-booking-router.go b/server/router/recurring-booking-router.go
+index 7ba40f1d..7e81f2d7 100644
+--- a/server/router/recurring-booking-router.go
++++ b/server/router/recurring-booking-router.go
+@@ -263,7 +263,11 @@ func (router *RecurringBookingRouter) create(w http.ResponseWriter, r *http.Requ
+ 			}
+ 		}
+ 		if valid {
+-			b.Approved = !spaceRequiresApproval
++			b.Approved = bookingRouter.isBookingApprovedOnCreate(
++				spaceRequiresApproval,
++				&bookingReq.BookingRequest,
++				location.OrganizationID,
++				requestUser)
+ 			if err := GetBookingRepository().Create(b); err != nil {
+ 				log.Println(err)
+ 				SendInternalServerError(w)
+diff --git a/server/router/settings-router.go b/server/router/settings-router.go
+index 77b2e9b2..7cbdb300 100644
+--- a/server/router/settings-router.go
++++ b/server/router/settings-router.go
+@@ -299,6 +299,7 @@ func (router *SettingsRouter) isValidSettingNameReadPublic(name string) bool {
+ 		name == SettingEnforceTOTP.Name ||
+ 		name == SettingHideReports.Name ||
+ 		name == SettingHideStats.Name ||
++		name == SettingWeeklyBookingWindowPolicy.Name ||
+ 		name == SettingAllowRecurringBookings.Name {
+ 		return true
+ 	}
+@@ -362,6 +363,7 @@ func (router *SettingsRouter) isValidSettingNameWrite(name string) bool {
+ 		name == SettingFeatureCalDAV.Name ||
+ 		name == SettingHideReports.Name ||
+ 		name == SettingHideStats.Name ||
++		name == SettingWeeklyBookingWindowPolicy.Name ||
+ 		name == SettingSubjectDefault.Name ||
+ 		name == SettingTargetUtilizationHoursPerWeek.Name ||
+ 		name == SettingKioskSecret.Name ||
+@@ -468,6 +470,9 @@ func (router *SettingsRouter) getSettingType(name string) SettingType {
+ 	if name == SettingHideStats.Name {
+ 		return SettingHideStats.Type
+ 	}
++	if name == SettingWeeklyBookingWindowPolicy.Name {
++		return SettingWeeklyBookingWindowPolicy.Type
++	}
+ 	if name == SettingSubjectDefault.Name {
+ 		return SettingSubjectDefault.Type
+ 	}
+diff --git a/server/router/test/booking-router_test.go b/server/router/test/booking-router_test.go
+index 9decd954..d6548b03 100644
+--- a/server/router/test/booking-router_test.go
++++ b/server/router/test/booking-router_test.go
+@@ -1643,6 +1643,87 @@ func TestBookingsInvalidFutureAdvanceDate(t *testing.T) {
+ 	CheckTestBool(t, false, res)
+ }
+ 
++func TestBookingsWeeklyBookingWindowPolicy(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	GetSettingsRepository().Set(org.ID, SettingWeeklyBookingWindowPolicy.Name, "1")
++	GetSettingsRepository().Set(org.ID, SettingDefaultTimezone.Name, "UTC")
++	user := CreateTestUserInOrg(org)
++	adminUser := CreateTestUserOrgAdmin(org)
++	router := &BookingRouter{}
++
++	mondayNow := time.Date(2026, 5, 4, 10, 0, 0, 0, time.UTC)
++	wednesdayNow := time.Date(2026, 5, 6, 10, 0, 0, 0, time.UTC)
++	thursdayNow := time.Date(2026, 5, 7, 10, 0, 0, 0, time.UTC)
++
++	valid, code, requiresApproval := router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(mondayNow, 0), org.ID, user, mondayNow)
++	CheckTestBool(t, true, valid)
++	CheckTestInt(t, 0, code)
++	CheckTestBool(t, false, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(mondayNow, 1), org.ID, user, mondayNow)
++	CheckTestBool(t, false, valid)
++	CheckTestInt(t, ResponseCodeBookingTooManyDaysInAdvance, code)
++	CheckTestBool(t, false, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(mondayNow, 1), org.ID, adminUser, mondayNow)
++	CheckTestBool(t, true, valid)
++	CheckTestInt(t, 0, code)
++	CheckTestBool(t, true, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(wednesdayNow, 2), org.ID, adminUser, wednesdayNow)
++	CheckTestBool(t, true, valid)
++	CheckTestInt(t, 0, code)
++	CheckTestBool(t, true, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(thursdayNow, 1), org.ID, user, thursdayNow)
++	CheckTestBool(t, true, valid)
++	CheckTestInt(t, 0, code)
++	CheckTestBool(t, false, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(thursdayNow, 2), org.ID, user, thursdayNow)
++	CheckTestBool(t, false, valid)
++	CheckTestInt(t, ResponseCodeBookingTooManyDaysInAdvance, code)
++	CheckTestBool(t, false, requiresApproval)
++
++	valid, code, requiresApproval = router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(thursdayNow, 2), org.ID, adminUser, thursdayNow)
++	CheckTestBool(t, false, valid)
++	CheckTestInt(t, ResponseCodeBookingTooManyDaysInAdvance, code)
++	CheckTestBool(t, false, requiresApproval)
++}
++
++func TestBookingsWeeklyBookingWindowPolicyDisabled(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	GetSettingsRepository().Set(org.ID, SettingDefaultTimezone.Name, "UTC")
++	user := CreateTestUserInOrg(org)
++	router := &BookingRouter{}
++	now := time.Date(2026, 5, 7, 10, 0, 0, 0, time.UTC)
++
++	valid, code, requiresApproval := router.IsValidWeeklyBookingWindow(
++		testWeeklyBookingRequest(now, 2), org.ID, user, now)
++	CheckTestBool(t, true, valid)
++	CheckTestInt(t, 0, code)
++	CheckTestBool(t, false, requiresApproval)
++}
++
++func testWeeklyBookingRequest(now time.Time, weekOffset int) *BookingRequest {
++	dayOffset := (int(now.Weekday()) + 6) % 7
++	weekStart := time.Date(now.Year(), now.Month(), now.Day()-dayOffset, 9, 0, 0, 0, now.Location())
++	enter := weekStart.AddDate(0, 0, weekOffset*7+1)
++	return &BookingRequest{
++		Enter: enter,
++		Leave: enter.Add(8 * time.Hour),
++	}
++}
++
+ func TestBookingsValidMaxUpcomingBookings(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/test/settings-router_test.go b/server/router/test/settings-router_test.go
+index 922ec985..9f86c09e 100644
+--- a/server/router/test/settings-router_test.go
++++ b/server/router/test/settings-router_test.go
+@@ -176,6 +176,7 @@ func TestSettingsReadAdmin(t *testing.T) {
+ 		SettingKioskModeEnabled.Name,
+ 		SettingHideReports.Name,
+ 		SettingHideStats.Name,
++		SettingWeeklyBookingWindowPolicy.Name,
+ 	}
+ 	forbiddenSettings := []string{
+ 		SettingDatabaseVersion.Name,
+-- 
+2.54.0
+

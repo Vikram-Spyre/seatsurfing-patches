@@ -1,0 +1,249 @@
+From 98793b6897d6be8ff6ab45f1b2916c8c2f807f90 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Thu, 28 May 2026 13:47:54 +0100
+Subject: [PATCH] feat(main): add booking creation lock UI
+
+---
+ ui/src/components/RuntimeConfig.ts    |  4 +++
+ ui/src/pages/admin/bookings/[id].tsx  | 19 ++++++++++--
+ ui/src/pages/admin/settings/index.tsx | 44 +++++++++++++++++++++++++++
+ ui/src/pages/search.tsx               | 24 +++++++++++++++
+ ui/src/types/ErrorText.ts             |  3 ++
+ 5 files changed, 92 insertions(+), 2 deletions(-)
+
+diff --git a/ui/src/components/RuntimeConfig.ts b/ui/src/components/RuntimeConfig.ts
+index 24153e1a..6a73eade 100644
+--- a/ui/src/components/RuntimeConfig.ts
++++ b/ui/src/components/RuntimeConfig.ts
+@@ -53,6 +53,7 @@ interface RuntimeUserInfos {
+   hasPasskeys: boolean;
+   isPrimaryDomain: boolean;
+   targetUtilizationHoursPerWeek: number;
++  disableBookingCreation: boolean;
+ }
+ 
+ export default class RuntimeConfig {
+@@ -110,6 +111,7 @@ export default class RuntimeConfig {
+       hasPasskeys: false,
+       isPrimaryDomain: false,
+       targetUtilizationHoursPerWeek: 0,
++      disableBookingCreation: false,
+     };
+   };
+ 
+@@ -234,6 +236,8 @@ export default class RuntimeConfig {
+             RuntimeConfig.INFOS.hideReports = s.value === "1";
+           if (s.name === "hide_stats")
+             RuntimeConfig.INFOS.hideStats = s.value === "1";
++          if (s.name === "disable_booking_creation")
++            RuntimeConfig.INFOS.disableBookingCreation = s.value === "1";
+           if (s.name === "target_utilization_hours_per_week")
+             RuntimeConfig.INFOS.targetUtilizationHoursPerWeek = window.parseInt(
+               s.value,
+diff --git a/ui/src/pages/admin/bookings/[id].tsx b/ui/src/pages/admin/bookings/[id].tsx
+index 83578cbd..ac53bffc 100644
+--- a/ui/src/pages/admin/bookings/[id].tsx
++++ b/ui/src/pages/admin/bookings/[id].tsx
+@@ -332,6 +332,12 @@ class EditBooking extends React.Component<Props, State> {
+       saved: false,
+       canSearchHint: "",
+     });
++    if (this.isNewBooking && RuntimeConfig.INFOS.disableBookingCreation) {
++      this.setState({
++        canSearchHint: "errorBookingCreationDisabled",
++      });
++      return;
++    }
+ 
+     if (this.dailyBasisBooking) {
+       let enter = new Date();
+@@ -712,7 +718,13 @@ class EditBooking extends React.Component<Props, State> {
+       );
+     }
+ 
+-    if (this.state.saved) {
++    if (this.isNewBooking && RuntimeConfig.INFOS.disableBookingCreation) {
++      hint = (
++        <Alert variant="warning">
++          {this.props.t("bookingCreationDisabled")}
++        </Alert>
++      );
++    } else if (this.state.saved) {
+       hint = (
+         <Alert variant="success">
+           {this.props.t(
+@@ -740,7 +752,10 @@ class EditBooking extends React.Component<Props, State> {
+     );
+     const buttonSave = (
+       <Button
+-        disabled={!(this.state.canSave && this.state.canEdit)}
++        disabled={
++          !(this.state.canSave && this.state.canEdit) ||
++          (this.isNewBooking && RuntimeConfig.INFOS.disableBookingCreation)
++        }
+         className="btn-sm"
+         variant="outline-secondary"
+         type="submit"
+diff --git a/ui/src/pages/admin/settings/index.tsx b/ui/src/pages/admin/settings/index.tsx
+index 8db1e4d7..64f823ef 100644
+--- a/ui/src/pages/admin/settings/index.tsx
++++ b/ui/src/pages/admin/settings/index.tsx
+@@ -87,6 +87,8 @@ interface State {
+   kioskModeEnabled: boolean;
+   hideReports: boolean;
+   hideStats: boolean;
++  weeklyBookingWindowPolicy: boolean;
++  disableBookingCreation: boolean;
+ }
+ 
+ interface Props {
+@@ -150,6 +152,8 @@ class Settings extends React.Component<Props, State> {
+       kioskModeEnabled: false,
+       hideReports: false,
+       hideStats: false,
++      weeklyBookingWindowPolicy: false,
++      disableBookingCreation: false,
+     };
+   }
+ 
+@@ -265,6 +269,10 @@ class Settings extends React.Component<Props, State> {
+           state.allowOrgDelete = s.value === "1";
+         if (s.name === "hide_reports") state.hideReports = s.value === "1";
+         if (s.name === "hide_stats") state.hideStats = s.value === "1";
++        if (s.name === "weekly_booking_window_policy")
++          state.weeklyBookingWindowPolicy = s.value === "1";
++        if (s.name === "disable_booking_creation")
++          state.disableBookingCreation = s.value === "1";
+       });
+ 
+       const convert = (value: number): number => {
+@@ -424,6 +432,14 @@ class Settings extends React.Component<Props, State> {
+       ),
+       new OrgSettings("hide_reports", this.state.hideReports ? "1" : "0"),
+       new OrgSettings("hide_stats", this.state.hideStats ? "1" : "0"),
++      new OrgSettings(
++        "weekly_booking_window_policy",
++        this.state.weeklyBookingWindowPolicy ? "1" : "0",
++      ),
++      new OrgSettings(
++        "disable_booking_creation",
++        this.state.disableBookingCreation ? "1" : "0",
++      ),
+     ];
+     try {
+       await OrgSettings.setAll(payload);
+@@ -1118,6 +1134,34 @@ class Settings extends React.Component<Props, State> {
+               />
+             </Col>
+           </Form.Group>
++          <Form.Group as={Row}>
++            <Col sm="6">
++              <Form.Check
++                type="checkbox"
++                id="check-disableBookingCreation"
++                label={this.props.t("disableBookingCreation")}
++                checked={this.state.disableBookingCreation}
++                onChange={(e: any) =>
++                  this.setState({ disableBookingCreation: e.target.checked })
++                }
++              />
++            </Col>
++          </Form.Group>
++          <Form.Group as={Row}>
++            <Col sm="6">
++              <Form.Check
++                type="checkbox"
++                id="check-weeklyBookingWindowPolicy"
++                label={this.props.t("weeklyBookingWindowPolicy")}
++                checked={this.state.weeklyBookingWindowPolicy}
++                onChange={(e: any) =>
++                  this.setState({
++                    weeklyBookingWindowPolicy: e.target.checked,
++                  })
++                }
++              />
++            </Col>
++          </Form.Group>
+           <Form.Group as={Row}>
+             <Col sm="6">
+               <Form.Check
+diff --git a/ui/src/pages/search.tsx b/ui/src/pages/search.tsx
+index f32b0f97..d00f8eff 100644
+--- a/ui/src/pages/search.tsx
++++ b/ui/src/pages/search.tsx
+@@ -724,6 +724,13 @@ class Search extends React.Component<Props, State> {
+       return;
+     }
+     if (item.available) {
++      if (RuntimeConfig.INFOS.disableBookingCreation) {
++        this.setState({
++          showError: true,
++          errorText: this.props.t("errorBookingCreationDisabled"),
++        });
++        return;
++      }
+       this.setState(
+         {
+           showConfirm: true,
+@@ -947,6 +954,14 @@ class Search extends React.Component<Props, State> {
+     if (e) {
+       e.preventDefault();
+     }
++    if (RuntimeConfig.INFOS.disableBookingCreation) {
++      this.setState({
++        showConfirm: false,
++        showError: true,
++        errorText: this.props.t("errorBookingCreationDisabled"),
++      });
++      return;
++    }
+     if (this.state.selectedSpace == null) {
+       return;
+     }
+@@ -2123,6 +2138,14 @@ class Search extends React.Component<Props, State> {
+ 
+             {hint}
+ 
++            <Alert
++              variant="warning"
++              className="margin-top-10 margin-bottom-0"
++              hidden={!RuntimeConfig.INFOS.disableBookingCreation}
++            >
++              {this.props.t("bookingCreationDisabled")}
++            </Alert>
++
+             <Form.Group className="d-flex margin-top-10">
+               <div className="me-2">
+                 <MapIcon
+@@ -2471,6 +2494,7 @@ class Search extends React.Component<Props, State> {
+               variant="primary"
+               disabled={
+                 this.state.confirmingBooking ||
++                RuntimeConfig.INFOS.disableBookingCreation ||
+                 (this.state.recurrence.active &&
+                   this.state.recurrence.finalNumBookings === 0)
+               }
+diff --git a/ui/src/types/ErrorText.ts b/ui/src/types/ErrorText.ts
+index 67fed1dc..a031a637 100644
+--- a/ui/src/types/ErrorText.ts
++++ b/ui/src/types/ErrorText.ts
+@@ -11,6 +11,7 @@ export const enum ResponseCode {
+   BookingInvalidMinBookingDuration = 1007,
+   BookingMaxHoursBeforeDelete = 1008,
+   BookingInPast = 1011,
++  BookingCreationDisabled = 1013,
+ 
+   PresenceReportDateRangeTooLong = 2001,
+ 
+@@ -49,6 +50,8 @@ export default class ErrorText {
+           num: INFOS.maxHoursBeforeDelete,
+         }),
+       [ResponseCode.BookingInPast]: () => t("errorInPast"),
++      [ResponseCode.BookingCreationDisabled]: () =>
++        t("errorBookingCreationDisabled"),
+       [ResponseCode.PresenceReportDateRangeTooLong]: () =>
+         t("errorDateRangeTooLong"),
+       [ResponseCode.UsernameExists]: () => t("errorUsernameExists"),
+-- 
+2.54.0
+

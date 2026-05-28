@@ -1,0 +1,272 @@
+From 777b08fc5679706af7a1fa68783ab26e15814edc Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Thu, 28 May 2026 13:50:10 +0100
+Subject: [PATCH] feat(i18n): add booking creation lock translations
+
+---
+ ui/i18n/translations.de.json    | 6 +++++-
+ ui/i18n/translations.en-GB.json | 4 ++++
+ ui/i18n/translations.en-US.json | 6 +++++-
+ ui/i18n/translations.es.json    | 6 +++++-
+ ui/i18n/translations.et.json    | 6 +++++-
+ ui/i18n/translations.fi.json    | 6 +++++-
+ ui/i18n/translations.fr.json    | 6 +++++-
+ ui/i18n/translations.he.json    | 6 +++++-
+ ui/i18n/translations.hu.json    | 6 +++++-
+ ui/i18n/translations.it.json    | 6 +++++-
+ ui/i18n/translations.nl.json    | 6 +++++-
+ ui/i18n/translations.pl.json    | 6 +++++-
+ ui/i18n/translations.pt.json    | 6 +++++-
+ ui/i18n/translations.ro.json    | 6 +++++-
+ ui/i18n/translations.zh-TW.json | 6 +++++-
+ 15 files changed, 74 insertions(+), 14 deletions(-)
+
+diff --git a/ui/i18n/translations.de.json b/ui/i18n/translations.de.json
+index 95070ab5..14d72067 100644
+--- a/ui/i18n/translations.de.json
++++ b/ui/i18n/translations.de.json
+@@ -484,5 +484,9 @@
+   "sponsorLink": "Sponsor werden",
+   "shapeRect": "Rechteck",
+   "shapeCircle": "Kreis/Oval",
+-  "featuresLink": "Funktionen vergleichen"
++  "featuresLink": "Funktionen vergleichen",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.en-GB.json b/ui/i18n/translations.en-GB.json
+index ad8a2ec2..8dfd9732 100644
+--- a/ui/i18n/translations.en-GB.json
++++ b/ui/i18n/translations.en-GB.json
+@@ -31,6 +31,7 @@
+   "bookingDuration": "Booking duration",
+   "bookingLink": "Booking Link",
+   "bookingPending": "Your booking needs to be confirmed first.",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
+   "bookingcolors": "Booking colors",
+   "bookings": "Bookings",
+   "bookingui": "Booking Site",
+@@ -112,6 +113,7 @@
+   "deleteSpace": "Delete space",
+   "description": "Description",
+   "disableBuddies": "Disable buddies",
++  "disableBookingCreation": "Disable booking creation",
+   "disconnect": "Disconnect",
+   "domain": "Domain",
+   "domains": "Domains",
+@@ -140,6 +142,7 @@
+   "errorBookingLimit": "You've reached the limit of {{num}} bookings.",
+   "errorCaldav": "Error connecting to CalDAV Server. Check URL and credentials.",
+   "errorConcurrentBookingLimit": "You've reached the limit of {{num}} concurrent bookings.",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
+   "errorConfluenceAnonymous": "Unauthorized.",
+   "errorConfluenceClientIdUnknown": "Let's get started.",
+   "errorDaysAdvance": "Your booking must not be more than {{num}} days in advance.",
+@@ -456,6 +459,7 @@
+   "statsHiddenByAdmin": "Utilization statistics are disabled by your administrator.",
+   "workingHoursHintOnlyDaily": "Bookings are only possible on a daily basis.",
+   "workingHoursHintExceedsMaxDuration": "The working hours exceeds max. booking duration of {{num}} hours.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy",
+   "apiToken": "API Token",
+   "apiTokenConfigured": "Configured",
+   "apiTokenNotConfigured": "Not configured",
+diff --git a/ui/i18n/translations.en-US.json b/ui/i18n/translations.en-US.json
+index 526ce3b4..8ab02ffb 100644
+--- a/ui/i18n/translations.en-US.json
++++ b/ui/i18n/translations.en-US.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.es.json b/ui/i18n/translations.es.json
+index 989f72a4..20696c04 100644
+--- a/ui/i18n/translations.es.json
++++ b/ui/i18n/translations.es.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.et.json b/ui/i18n/translations.et.json
+index 3ddb2e93..e50eec1c 100644
+--- a/ui/i18n/translations.et.json
++++ b/ui/i18n/translations.et.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.fi.json b/ui/i18n/translations.fi.json
+index dc44a550..51ef7e1c 100644
+--- a/ui/i18n/translations.fi.json
++++ b/ui/i18n/translations.fi.json
+@@ -481,5 +481,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.fr.json b/ui/i18n/translations.fr.json
+index ccbbc40c..b0e24fb0 100644
+--- a/ui/i18n/translations.fr.json
++++ b/ui/i18n/translations.fr.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.he.json b/ui/i18n/translations.he.json
+index 17ccc4a3..bfbef81a 100644
+--- a/ui/i18n/translations.he.json
++++ b/ui/i18n/translations.he.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.hu.json b/ui/i18n/translations.hu.json
+index 72d90099..de5acca0 100644
+--- a/ui/i18n/translations.hu.json
++++ b/ui/i18n/translations.hu.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.it.json b/ui/i18n/translations.it.json
+index 348c98cd..59657c75 100644
+--- a/ui/i18n/translations.it.json
++++ b/ui/i18n/translations.it.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.nl.json b/ui/i18n/translations.nl.json
+index ff5616d4..d0173a4e 100644
+--- a/ui/i18n/translations.nl.json
++++ b/ui/i18n/translations.nl.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.pl.json b/ui/i18n/translations.pl.json
+index aae6babc..3b886364 100644
+--- a/ui/i18n/translations.pl.json
++++ b/ui/i18n/translations.pl.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.pt.json b/ui/i18n/translations.pt.json
+index 50830a08..b79557ca 100644
+--- a/ui/i18n/translations.pt.json
++++ b/ui/i18n/translations.pt.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.ro.json b/ui/i18n/translations.ro.json
+index 60ad126d..f002fb16 100644
+--- a/ui/i18n/translations.ro.json
++++ b/ui/i18n/translations.ro.json
+@@ -483,5 +483,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+diff --git a/ui/i18n/translations.zh-TW.json b/ui/i18n/translations.zh-TW.json
+index db467c1f..2e6e6db5 100644
+--- a/ui/i18n/translations.zh-TW.json
++++ b/ui/i18n/translations.zh-TW.json
+@@ -481,5 +481,9 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "bookingCreationDisabled": "Booking creation is currently disabled.",
++  "disableBookingCreation": "Disable booking creation",
++  "errorBookingCreationDisabled": "Booking creation is currently disabled.",
++  "weeklyBookingWindowPolicy": "Enable weekly booking window policy"
+ }
+-- 
+2.54.0
+
