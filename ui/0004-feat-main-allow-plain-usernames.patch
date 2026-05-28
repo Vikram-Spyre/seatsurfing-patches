@@ -1,0 +1,399 @@
+From 418d99f795330978089fb126f63e574c0a4a2162 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 16:07:09 +0100
+Subject: [PATCH] feat(main): allow plain usernames
+
+---
+ e2e/tests/admin-ui.spec.ts            | 43 +++++++++++++++++
+ ui/src/components/NavBar.tsx          | 10 ++--
+ ui/src/components/RuntimeConfig.ts    |  4 ++
+ ui/src/pages/admin/settings/index.tsx | 22 +++++++++
+ ui/src/pages/admin/users/[id].tsx     | 67 +++++++++++++--------------
+ ui/src/pages/login/index.tsx          | 20 ++++++--
+ ui/src/pages/resetpw/index.tsx        | 11 ++++-
+ 7 files changed, 134 insertions(+), 43 deletions(-)
+
+diff --git a/e2e/tests/admin-ui.spec.ts b/e2e/tests/admin-ui.spec.ts
+index 92898f0a..72e9baab 100644
+--- a/e2e/tests/admin-ui.spec.ts
++++ b/e2e/tests/admin-ui.spec.ts
+@@ -70,3 +70,46 @@ test("crud location", async ({ page }) => {
+   await expect(page).toHaveURL(/locations\/$/);
+   await expect(page.getByRole("cell", { name: name })).toHaveCount(0);
+ });
++
++test("plain usernames setting relaxes the user form", async ({ page }) => {
++  await page.goto("/ui/admin/settings/");
++  await expect(page).toHaveURL(/admin\/settings\/$/);
++
++  const plainUsernameToggle = page.getByRole("checkbox", {
++    name: "Allow plain usernames",
++  });
++  await plainUsernameToggle.check();
++  await page.getByRole("button", { name: "Save" }).click();
++  await page.getByRole("button", { name: "Reload" }).click();
++
++  const accessToken = await page.evaluate(
++    () => window.localStorage.getItem("accessToken") || "",
++  );
++
++  await page.goto("/ui/admin/users/add/");
++  await expect(page).toHaveURL(/admin\/users\/add\/$/);
++  await expect(page.locator("#email")).toHaveAttribute("type", "text");
++
++  await page.evaluate(() => {
++    window.localStorage.removeItem("accessToken");
++    window.localStorage.removeItem("accessTokenExpiry");
++    window.localStorage.removeItem("logoutUrl");
++    window.localStorage.removeItem("profilePageUrl");
++    window.localStorage.removeItem("refreshToken");
++  });
++
++  await page.goto("/ui/login/");
++  await expect(page).toHaveURL(/login\/$/);
++  await expect(
++    page.locator('form[name="password-login"] input[type="text"]'),
++  ).toHaveCount(1);
++
++  await page.request.put("/setting/allow_plain_username", {
++    headers: {
++      Authorization: `Bearer ${accessToken}`,
++    },
++    data: {
++      value: "0",
++    },
++  });
++});
+diff --git a/ui/src/components/NavBar.tsx b/ui/src/components/NavBar.tsx
+index 1950af3a..5a60193c 100644
+--- a/ui/src/components/NavBar.tsx
++++ b/ui/src/components/NavBar.tsx
+@@ -280,8 +280,12 @@ class NavBar extends React.Component<Props, State> {
+             >
+               <Form.Group>
+                 <Form.Control
+-                  type="email"
+-                  placeholder={this.props.t("emailPlaceholder")}
++                  type={RuntimeConfig.INFOS.allowPlainUsername ? "text" : "email"}
++                  placeholder={
++                    RuntimeConfig.INFOS.allowPlainUsername
++                      ? this.props.t("username")
++                      : this.props.t("emailPlaceholder")
++                  }
+                   required={true}
+                   value={this.state.targetUserEmail}
+                   onChange={(e: any) =>
+@@ -294,7 +298,7 @@ class NavBar extends React.Component<Props, State> {
+                   autoFocus={true}
+                 />
+                 <Form.Control.Feedback type="invalid">
+-                  {this.props.t("errorInvalidEmail")}
++                  {this.props.t("errorInvalidLogin")}
+                 </Form.Control.Feedback>
+               </Form.Group>
+             </Form>
+diff --git a/ui/src/components/RuntimeConfig.ts b/ui/src/components/RuntimeConfig.ts
+index 772e8662..24153e1a 100644
+--- a/ui/src/components/RuntimeConfig.ts
++++ b/ui/src/components/RuntimeConfig.ts
+@@ -42,6 +42,7 @@ interface RuntimeUserInfos {
+   orgPrimaryDomain: string;
+   disablePasswordLogin: boolean;
+   allowRecurringBookings: boolean;
++  allowPlainUsername: boolean;
+   subjectDefault: number;
+   use24HourTime: boolean;
+   dateFormat: string;
+@@ -98,6 +99,7 @@ export default class RuntimeConfig {
+       orgPrimaryDomain: "",
+       disablePasswordLogin: false,
+       allowRecurringBookings: true,
++      allowPlainUsername: false,
+       subjectDefault: 2,
+       use24HourTime: true,
+       dateFormat: "Y-m-d",
+@@ -190,6 +192,8 @@ export default class RuntimeConfig {
+             RuntimeConfig.INFOS.featureCalDAV = s.value === "1";
+           if (s.name === "allow_recurring_bookings")
+             RuntimeConfig.INFOS.allowRecurringBookings = s.value === "1";
++          if (s.name === "allow_plain_username")
++            RuntimeConfig.INFOS.allowPlainUsername = s.value === "1";
+           if (s.name === "_sys_admin_menu_items")
+             RuntimeConfig.INFOS.pluginMenuItems = s.value
+               ? JSON.parse(s.value)
+diff --git a/ui/src/pages/admin/settings/index.tsx b/ui/src/pages/admin/settings/index.tsx
+index 4fee231b..8db1e4d7 100644
+--- a/ui/src/pages/admin/settings/index.tsx
++++ b/ui/src/pages/admin/settings/index.tsx
+@@ -43,6 +43,7 @@ import UpdateChecker from "@/util/UpdateChecker";
+ 
+ interface State {
+   allowAnyUser: boolean;
++  allowPlainUsername: boolean;
+   defaultTimezone: string;
+   confluenceServerSharedSecret: string;
+   customLogoUrl: string;
+@@ -105,6 +106,7 @@ class Settings extends React.Component<Props, State> {
+     this.timezones = [];
+     this.state = {
+       allowAnyUser: true,
++      allowPlainUsername: false,
+       defaultTimezone: "",
+       confluenceServerSharedSecret: "",
+       customLogoUrl: "",
+@@ -197,6 +199,8 @@ class Settings extends React.Component<Props, State> {
+       const state: any = {};
+       settings.forEach((s) => {
+         if (s.name === "allow_any_user") state.allowAnyUser = s.value === "1";
++        if (s.name === "allow_plain_username")
++          state.allowPlainUsername = s.value === "1";
+         if (s.name === "default_timezone") state.defaultTimezone = s.value;
+         if (s.name === "confluence_server_shared_secret")
+           state.confluenceServerSharedSecret = s.value;
+@@ -310,6 +314,10 @@ class Settings extends React.Component<Props, State> {
+     });
+     const payload = [
+       new OrgSettings("allow_any_user", this.state.allowAnyUser ? "1" : "0"),
++      new OrgSettings(
++        "allow_plain_username",
++        this.state.allowPlainUsername ? "1" : "0",
++      ),
+       new OrgSettings("default_timezone", this.state.defaultTimezone),
+       new OrgSettings(
+         "confluence_server_shared_secret",
+@@ -1429,6 +1437,20 @@ class Settings extends React.Component<Props, State> {
+               />
+             </Col>
+           </Form.Group>
++          <Form.Group as={Row}>
++            <Col sm="6">
++              <Form.Check
++                type="checkbox"
++                id="check-allowPlainUsername"
++                title={this.props.t("allowPlainUsernameTooltip")}
++                label={this.props.t("allowPlainUsername")}
++                checked={this.state.allowPlainUsername}
++                onChange={(e: any) =>
++                  this.setState({ allowPlainUsername: e.target.checked })
++                }
++              />
++            </Col>
++          </Form.Group>
+           {authProviderTable}
+           {dangerZone}
+         </Form>
+diff --git a/ui/src/pages/admin/users/[id].tsx b/ui/src/pages/admin/users/[id].tsx
+index fbd70de1..e8e6043c 100644
+--- a/ui/src/pages/admin/users/[id].tsx
++++ b/ui/src/pages/admin/users/[id].tsx
+@@ -448,6 +448,7 @@ class EditUser extends React.Component<Props, State> {
+         </>
+       );
+     }
++    const allowPlainUsername = RuntimeConfig.INFOS.allowPlainUsername;
+     return (
+       <FullLayout headline={this.props.t("editUser")} buttons={buttons}>
+         <Form onSubmit={this.onSubmit} id="form">
+@@ -458,25 +459,46 @@ class EditUser extends React.Component<Props, State> {
+             </Form.Label>
+             <Col sm="4">{roleSelect}</Col>
+           </Form.Group>
+-          {!this.isServiceAccount(this.state.role) && (
+-            <Form.Group as={Row}>
+-              <Form.Label htmlFor="email" column sm="2">
+-                {this.props.t("emailAddress")}
+-              </Form.Label>
+-              <Col sm="4">
++          <Form.Group as={Row}>
++            <Form.Label htmlFor="email" column sm="2">
++              {this.props.t(
++                this.isServiceAccount(this.state.role) || allowPlainUsername
++                  ? "username"
++                  : "emailAddress",
++              )}
++            </Form.Label>
++            <Col sm="4">
++              {this.isServiceAccount(this.state.role) ? (
++                <InputGroup>
++                  <Form.Control
++                    id="email"
++                    type="text"
++                    value={this.state.email}
++                    onChange={(e: any) =>
++                      this.setState({ email: e.target.value })
++                    }
++                    required={true}
++                  />
++                  <CopyToClipboardButton text={this.state.email} />
++                </InputGroup>
++              ) : (
+                 <Form.Control
+                   id="email"
+-                  type="email"
+-                  placeholder="some@domain.com"
++                  type={allowPlainUsername ? "text" : "email"}
++                  placeholder={
++                    allowPlainUsername
++                      ? this.props.t("username")
++                      : this.props.t("emailPlaceholder")
++                  }
+                   value={this.state.email}
+                   onChange={(e: any) =>
+                     this.setState({ email: e.target.value })
+                   }
+                   required={true}
+                 />
+-              </Col>
+-            </Form.Group>
+-          )}
++              )}
++            </Col>
++          </Form.Group>
+           <Form.Group as={Row}>
+             <Form.Label htmlFor="firstname" column sm="2">
+               {this.props.t("firstname")}
+@@ -511,29 +533,6 @@ class EditUser extends React.Component<Props, State> {
+               />
+             </Col>
+           </Form.Group>
+-          <Form.Group as={Row}>
+-            <Form.Label htmlFor="username" column sm="2">
+-              {this.props.t("username")}
+-            </Form.Label>
+-            <Col sm="4">
+-              <InputGroup>
+-                <Form.Control
+-                  id="username"
+-                  type="text"
+-                  readOnly={!this.isServiceAccount(this.state.role)}
+-                  value={this.state.email}
+-                  onChange={
+-                    this.isServiceAccount(this.state.role)
+-                      ? (e: any) => this.setState({ email: e.target.value })
+-                      : undefined
+-                  }
+-                  required={this.isServiceAccount(this.state.role)}
+-                />
+-                <CopyToClipboardButton text={this.state.email} />
+-              </InputGroup>
+-            </Col>
+-          </Form.Group>
+-
+           {/* Auth method selection for non-service accounts */}
+           <Form.Group
+             as={Row}
+diff --git a/ui/src/pages/login/index.tsx b/ui/src/pages/login/index.tsx
+index 83f00a43..82bf3322 100644
+--- a/ui/src/pages/login/index.tsx
++++ b/ui/src/pages/login/index.tsx
+@@ -41,6 +41,7 @@ interface State {
+   redirect: string | null;
+   requirePassword: boolean;
+   disablePasswordLogin: boolean;
++  allowPlainUsername: boolean;
+   providers: AuthProvider[] | null;
+   inPasswordSubmit: boolean;
+   inAuthProviderLogin: boolean;
+@@ -80,6 +81,7 @@ class Login extends React.Component<Props, State> {
+       redirect: null,
+       requirePassword: false,
+       disablePasswordLogin: false,
++      allowPlainUsername: false,
+       providers: null,
+       inPasswordSubmit: false,
+       inAuthProviderLogin: false,
+@@ -114,6 +116,7 @@ class Login extends React.Component<Props, State> {
+         providers: res.json.authProviders,
+         noPasswords: !res.json.requirePassword,
+         disablePasswordLogin: res.json.disablePasswordLogin,
++        allowPlainUsername: res.json.allowPlainUsername,
+         singleOrgMode: true,
+         loading: false,
+       },
+@@ -606,9 +609,14 @@ class Login extends React.Component<Props, State> {
+             <p>{this.props.t("passwordUpdateInfo")}</p>
+             <Form.Group style={{ marginBottom: "5px" }}>
+               <Form.Control
+-                type="email"
++                type={this.state.allowPlainUsername ? "text" : "email"}
+                 readOnly={true}
+                 value={this.state.email}
++                placeholder={
++                  this.state.allowPlainUsername
++                    ? this.props.t("username")
++                    : this.props.t("emailPlaceholder")
++                }
+               />
+             </Form.Group>
+             <Form.Group style={{ marginBottom: "5px" }}>
+@@ -674,9 +682,13 @@ class Login extends React.Component<Props, State> {
+             {renderBrand()}
+             <Form.Group style={{ marginBottom: "5px" }}>
+               <Form.Control
+-                type="email"
++                type={this.state.allowPlainUsername ? "text" : "email"}
+                 readOnly={this.state.inPasswordSubmit}
+-                placeholder={this.props.t("emailPlaceholder")}
++                placeholder={
++                  this.state.allowPlainUsername
++                    ? this.props.t("username")
++                    : this.props.t("emailPlaceholder")
++                }
+                 value={this.state.email}
+                 onChange={(e: any) =>
+                   this.setState({
+@@ -718,7 +730,7 @@ class Login extends React.Component<Props, State> {
+               </InputGroup>
+             </Form.Group>
+             <Form.Control.Feedback type="invalid">
+-              {this.props.t("errorInvalidEmail")}
++              {this.props.t("errorInvalidLogin")}
+             </Form.Control.Feedback>
+             {securityFeaturesEnabled && this.state.passkeyAvailable && (
+               <p className="margin-top-25">
+diff --git a/ui/src/pages/resetpw/index.tsx b/ui/src/pages/resetpw/index.tsx
+index b6713778..c00abdd2 100644
+--- a/ui/src/pages/resetpw/index.tsx
++++ b/ui/src/pages/resetpw/index.tsx
+@@ -12,6 +12,7 @@ interface State {
+   complete: boolean;
+   success: boolean;
+   email: string;
++  allowPlainUsername: boolean;
+ }
+ 
+ interface Props {
+@@ -29,6 +30,7 @@ class InitPasswordReset extends React.Component<Props, State> {
+       complete: false,
+       success: false,
+       email: "",
++      allowPlainUsername: false,
+     };
+   }
+ 
+@@ -48,6 +50,7 @@ class InitPasswordReset extends React.Component<Props, State> {
+     }
+     this.org = new Organization();
+     this.org.deserialize(res.json.organization);
++    this.setState({ allowPlainUsername: !!res.json.allowPlainUsername });
+   };
+ 
+   onPasswordSubmit = async (e: any) => {
+@@ -81,8 +84,12 @@ class InitPasswordReset extends React.Component<Props, State> {
+       <>
+         <Form.Group>
+           <Form.Control
+-            type="email"
+-            placeholder={this.props.t("emailPlaceholder")}
++            type="text"
++            placeholder={
++              this.state.allowPlainUsername
++                ? this.props.t("username")
++                : this.props.t("emailPlaceholder")
++            }
+             value={this.state.email}
+             onChange={(e: any) => this.setState({ email: e.target.value })}
+             required={true}
+-- 
+2.54.0
+

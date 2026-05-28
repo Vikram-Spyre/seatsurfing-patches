@@ -1,0 +1,521 @@
+From 29fb5ac145680a1161e1b784b58e39765e4e77c0 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 16:02:45 +0100
+Subject: [PATCH] feat(server): allow plain usernames
+
+---
+ server/repository/settings-repository.go   |  2 +
+ server/router/auth-router.go               | 25 +++++++--
+ server/router/settings-router.go           |  6 +++
+ server/router/test/auth-router_test.go     | 60 ++++++++++++++++++++++
+ server/router/test/settings-router_test.go | 32 ++++++++++++
+ server/router/test/user-router_test.go     | 49 ++++++++++++++++++
+ server/router/user-router.go               | 45 +++++++++++-----
+ server/util/test/validation_test.go        | 29 +++++++++++
+ server/util/validation.go                  |  9 ++++
+ 9 files changed, 241 insertions(+), 16 deletions(-)
+
+diff --git a/server/repository/settings-repository.go b/server/repository/settings-repository.go
+index 9f5ef024..7c98841a 100644
+--- a/server/repository/settings-repository.go
++++ b/server/repository/settings-repository.go
+@@ -32,6 +32,7 @@ var (
+ 	SettingDatabaseVersion                SettingName = SettingName{Name: "db_version", Type: SettingTypeInt}
+ 	SettingEmailFooterPrefix              SettingName = SettingName{Name: "email_footer_", Type: SettingTypeString}
+ 	SettingAllowAnyUser                   SettingName = SettingName{Name: "allow_any_user", Type: SettingTypeBool}
++	SettingAllowPlainUsername             SettingName = SettingName{Name: "allow_plain_username", Type: SettingTypeBool}
+ 	SettingConfluenceServerSharedSecret   SettingName = SettingName{Name: "confluence_server_shared_secret", Type: SettingTypeString}
+ 	SettingConfluenceAnonymous            SettingName = SettingName{Name: "confluence_anonymous", Type: SettingTypeBool}
+ 	SettingMaxBookingsPerUser             SettingName = SettingName{Name: "max_bookings_per_user", Type: SettingTypeInt}
+@@ -279,6 +280,7 @@ func (r *SettingsRepository) InitDefaultSettingsForOrg(organizationID string) er
+ 		"($1, '"+SettingFeatureCalDAV.Name+"', '1'), "+
+ 		"($1, '"+SettingKioskModeEnabled.Name+"', '0'), "+
+ 		"($1, '"+SettingAllowAnyUser.Name+"', '1'), "+
++		"($1, '"+SettingAllowPlainUsername.Name+"', '0'), "+
+ 		"($1, '"+SettingDailyBasisBooking.Name+"', '0'), "+
+ 		"($1, '"+SettingNoAdminRestrictions.Name+"', '0'), "+
+ 		"($1, '"+SettingCustomLogoUrl.Name+"', ''), "+
+diff --git a/server/router/auth-router.go b/server/router/auth-router.go
+index c9bd878b..91fcb28c 100644
+--- a/server/router/auth-router.go
++++ b/server/router/auth-router.go
+@@ -105,7 +105,7 @@ type IdPUserInfo struct {
+ 
+ type InitPasswordResetRequest struct {
+ 	OrganizationID string `json:"organizationId" validate:"required,uuid"`
+-	Email          string `json:"email" validate:"required,email,max=256"`
++	Email          string `json:"email" validate:"required,max=256"`
+ }
+ 
+ type CompletePasswordResetRequest struct {
+@@ -117,11 +117,12 @@ type AuthPreflightResponse struct {
+ 	AuthProviders        []*GetAuthProviderPublicResponse `json:"authProviders"`
+ 	RequirePassword      bool                             `json:"requirePassword"`
+ 	DisablePasswordLogin bool                             `json:"disablePasswordLogin"`
++	AllowPlainUsername   bool                             `json:"allowPlainUsername"`
+ 	Domain               string                           `json:"domain"`
+ }
+ 
+ type AuthPasswordRequest struct {
+-	Email             string          `json:"email" validate:"required,email,max=256"`
++	Email             string          `json:"email" validate:"required,max=256"`
+ 	Password          string          `json:"password" validate:"required,min=8,max=64"`
+ 	OrganizationID    string          `json:"organizationId" validate:"required,uuid"`
+ 	Code              string          `json:"code,omitempty"`
+@@ -130,7 +131,7 @@ type AuthPasswordRequest struct {
+ }
+ 
+ type PasswordUpdateRequest struct {
+-	Email          string `json:"email" validate:"required,email,max=256"`
++	Email          string `json:"email" validate:"required,max=256"`
+ 	Password       string `json:"password" validate:"required,min=8,max=64"`
+ 	NewPassword    string `json:"newPassword" validate:"required,min=8,max=64"`
+ 	OrganizationID string `json:"organizationId" validate:"required,uuid"`
+@@ -303,6 +304,11 @@ func (router *AuthRouter) initPasswordReset(w http.ResponseWriter, r *http.Reque
+ 		SendBadRequest(w)
+ 		return
+ 	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(m.OrganizationID, SettingAllowPlainUsername.Name)
++	if !isValidUserIdentifier(m.Email, allowPlainUsername) {
++		SendBadRequest(w)
++		return
++	}
+ 	user, err := GetUserRepository().GetByEmail(m.OrganizationID, m.Email)
+ 	if user == nil || err != nil {
+ 		if err != nil {
+@@ -544,6 +550,11 @@ func (router *AuthRouter) loginPassword(w http.ResponseWriter, r *http.Request)
+ 		SendBadRequest(w)
+ 		return
+ 	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(m.OrganizationID, SettingAllowPlainUsername.Name)
++	if !isValidUserIdentifier(m.Email, allowPlainUsername) {
++		SendBadRequest(w)
++		return
++	}
+ 	user, err := GetUserRepository().GetByEmail(m.OrganizationID, m.Email)
+ 	if err != nil {
+ 		SendNotFound(w)
+@@ -617,6 +628,11 @@ func (router *AuthRouter) updatePassword(w http.ResponseWriter, r *http.Request)
+ 		SendBadRequest(w)
+ 		return
+ 	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(m.OrganizationID, SettingAllowPlainUsername.Name)
++	if !isValidUserIdentifier(m.Email, allowPlainUsername) {
++		SendBadRequest(w)
++		return
++	}
+ 
+ 	if m.Password == m.NewPassword {
+ 		SendBadRequest(w)
+@@ -1263,8 +1279,11 @@ func (router *AuthRouter) getPreflightResponseForOrg(org *Organization) *AuthPre
+ 		},
+ 		RequirePassword:      false,
+ 		DisablePasswordLogin: GetConfig().DisablePasswordLogin,
++		AllowPlainUsername:   false,
+ 		AuthProviders:        []*GetAuthProviderPublicResponse{},
+ 	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(org.ID, SettingAllowPlainUsername.Name)
++	res.AllowPlainUsername = allowPlainUsername
+ 	domain, err := GetOrganizationRepository().GetPrimaryDomain(org)
+ 	if domain != nil && err == nil {
+ 		res.Domain = domain.DomainName
+diff --git a/server/router/settings-router.go b/server/router/settings-router.go
+index f7af2872..77b2e9b2 100644
+--- a/server/router/settings-router.go
++++ b/server/router/settings-router.go
+@@ -271,6 +271,7 @@ func (router *SettingsRouter) isValidSettingNameReadPublic(name string) bool {
+ 		name == SettingMaxBookingDurationHours.Name ||
+ 		name == SettingShowNames.Name ||
+ 		name == SettingAllowBookingsNonExistingUsers.Name ||
++		name == SettingAllowPlainUsername.Name ||
+ 		name == SettingDailyBasisBooking.Name ||
+ 		name == SettingNoAdminRestrictions.Name ||
+ 		name == SettingCustomLogoUrl.Name ||
+@@ -307,6 +308,7 @@ func (router *SettingsRouter) isValidSettingNameReadPublic(name string) bool {
+ func (router *SettingsRouter) isValidSettingNameReadAdmin(name string) bool {
+ 	if router.isValidSettingNameReadPublic(name) ||
+ 		name == SettingAllowAnyUser.Name ||
++		name == SettingAllowPlainUsername.Name ||
+ 		name == SettingConfluenceServerSharedSecret.Name ||
+ 		name == SettingConfluenceAnonymous.Name ||
+ 		name == SysSettingOrgSignupDelete ||
+@@ -330,6 +332,7 @@ func (router *SettingsRouter) isValidSettingNameReadAdmin(name string) bool {
+ 
+ func (router *SettingsRouter) isValidSettingNameWrite(name string) bool {
+ 	if name == SettingAllowAnyUser.Name ||
++		name == SettingAllowPlainUsername.Name ||
+ 		name == SettingConfluenceServerSharedSecret.Name ||
+ 		name == SettingConfluenceAnonymous.Name ||
+ 		name == SettingEnableMaxHourBeforeDelete.Name ||
+@@ -372,6 +375,9 @@ func (router *SettingsRouter) getSettingType(name string) SettingType {
+ 	if name == SettingAllowAnyUser.Name {
+ 		return SettingAllowAnyUser.Type
+ 	}
++	if name == SettingAllowPlainUsername.Name {
++		return SettingAllowPlainUsername.Type
++	}
+ 	if name == SettingConfluenceServerSharedSecret.Name {
+ 		return SettingConfluenceServerSharedSecret.Type
+ 	}
+diff --git a/server/router/test/auth-router_test.go b/server/router/test/auth-router_test.go
+index a06ce905..10c37396 100644
+--- a/server/router/test/auth-router_test.go
++++ b/server/router/test/auth-router_test.go
+@@ -48,6 +48,51 @@ func TestAuthPasswordLogin(t *testing.T) {
+ 	CheckTestString(t, user.Email, resBody2.Email)
+ }
+ 
++func TestAuthPasswordLoginPlainUsername(t *testing.T) {
++	ClearTestDB()
++
++	org := CreateTestOrg("test.com")
++	if err := GetSettingsRepository().Set(org.ID, SettingAllowPlainUsername.Name, "1"); err != nil {
++		t.Fatal(err)
++	}
++	user := &User{
++		Email:          "john.doe",
++		OrganizationID: org.ID,
++	}
++	user.HashedPassword = NullString(GetUserRepository().GetHashedPassword(TestPassword))
++	if err := GetUserRepository().Create(user); err != nil {
++		t.Fatal(err)
++	}
++
++	payload := "{ \"email\": \"" + user.Email + "\", \"password\": \"" + TestPassword + "\", \"organizationId\": \"" + org.ID + "\" }"
++	req := NewHTTPRequest("POST", "/auth/login", "", bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody *JWTResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestBool(t, true, len(resBody.AccessToken) > 32)
++	CheckTestBool(t, true, len(resBody.RefreshToken) == 36)
++}
++
++func TestAuthPasswordLoginPlainUsernameForbiddenByDefault(t *testing.T) {
++	ClearTestDB()
++
++	org := CreateTestOrg("test.com")
++	user := &User{
++		Email:          "john.doe",
++		OrganizationID: org.ID,
++	}
++	user.HashedPassword = NullString(GetUserRepository().GetHashedPassword(TestPassword))
++	if err := GetUserRepository().Create(user); err != nil {
++		t.Fatal(err)
++	}
++
++	payload := "{ \"email\": \"" + user.Email + "\", \"password\": \"" + TestPassword + "\", \"organizationId\": \"" + org.ID + "\" }"
++	req := NewHTTPRequest("POST", "/auth/login", "", bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
++}
++
+ func TestAuthPasswordLoginIgnoresTotpWhenSecurityDisabled(t *testing.T) {
+ 	ClearTestDB()
+ 
+@@ -271,6 +316,21 @@ func TestAuthOrgDetails(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusNotFound, res.Code)
+ }
+ 
++func TestAuthOrgDetailsPlainUsername(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test1.com")
++	if err := GetSettingsRepository().Set(org.ID, SettingAllowPlainUsername.Name, "1"); err != nil {
++		t.Fatal(err)
++	}
++
++	req := NewHTTPRequestWithAccessToken("GET", "/auth/org/test1.com", "", nil)
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody *AuthPreflightResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestBool(t, true, resBody.AllowPlainUsername)
++}
++
+ func TestAuthVerify(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test1.com")
+diff --git a/server/router/test/settings-router_test.go b/server/router/test/settings-router_test.go
+index fe0a3aaa..922ec985 100644
+--- a/server/router/test/settings-router_test.go
++++ b/server/router/test/settings-router_test.go
+@@ -70,6 +70,7 @@ func TestSettingsReadPublic(t *testing.T) {
+ 		SettingMaxHoursPartiallyBookedEnabled.Name,
+ 		SettingMinBookingDurationHours.Name,
+ 		SettingAllowBookingsNonExistingUsers.Name,
++		SettingAllowPlainUsername.Name,
+ 		SettingDefaultTimezone.Name,
+ 		SettingCustomLogoUrl.Name,
+ 		SettingWebsiteName.Name,
+@@ -252,6 +253,37 @@ func TestSettingsCRUD(t *testing.T) {
+ 	CheckTestString(t, "0", resBody3)
+ }
+ 
++func TestSettingsPlainUsernameCRUD(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserOrgAdmin(org)
++	loginResponse := LoginTestUser(user.ID)
++
++	payload := `{"value": "1"}`
++	req := NewHTTPRequest("PUT", "/setting/"+SettingAllowPlainUsername.Name, loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusNoContent, res.Code)
++
++	req = NewHTTPRequest("GET", "/setting/"+SettingAllowPlainUsername.Name, loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody string
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestString(t, "1", resBody)
++
++	payload = `{"value": "0"}`
++	req = NewHTTPRequest("PUT", "/setting/"+SettingAllowPlainUsername.Name, loginResponse.UserID, bytes.NewBufferString(payload))
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusNoContent, res.Code)
++
++	req = NewHTTPRequest("GET", "/setting/"+SettingAllowPlainUsername.Name, loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody2 string
++	json.Unmarshal(res.Body.Bytes(), &resBody2)
++	CheckTestString(t, "0", resBody2)
++}
++
+ func TestSettingsCRUDMany(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/test/user-router_test.go b/server/router/test/user-router_test.go
+index 57c9d0a1..2e57cbb9 100644
+--- a/server/router/test/user-router_test.go
++++ b/server/router/test/user-router_test.go
+@@ -82,6 +82,55 @@ func TestUserCRUD(t *testing.T) {
+ 	CheckTestResponseCode(t, http.StatusNotFound, res.Code)
+ }
+ 
++func TestUserPlainUsernameForbiddenByDefault(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserOrgAdmin(org)
++	loginResponse := LoginTestUser(user.ID)
++
++	payload := "{\"email\": \"john.doe\", \"firstname\": \"John\", \"lastname\": \"Doe\", \"password\": \"" + TestPassword + "\", \"role\": " + strconv.Itoa(int(UserRoleOrgAdmin)) + "}"
++	req := NewHTTPRequest("POST", "/user/", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusBadRequest, res.Code)
++}
++
++func TestUserPlainUsernameCRUD(t *testing.T) {
++	ClearTestDB()
++	org := CreateTestOrg("test.com")
++	user := CreateTestUserOrgAdmin(org)
++	loginResponse := LoginTestUser(user.ID)
++	if err := GetSettingsRepository().Set(org.ID, SettingAllowPlainUsername.Name, "1"); err != nil {
++		t.Fatal(err)
++	}
++
++	username := "john.doe"
++	payload := "{\"email\": \"" + username + "\", \"firstname\": \"John\", \"lastname\": \"Doe\", \"password\": \"" + TestPassword + "\", \"role\": " + strconv.Itoa(int(UserRoleOrgAdmin)) + "}"
++	req := NewHTTPRequest("POST", "/user/", loginResponse.UserID, bytes.NewBufferString(payload))
++	res := ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusCreated, res.Code)
++	userID := res.Header().Get("X-Object-Id")
++
++	req = NewHTTPRequest("GET", "/user/"+userID, loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody *GetUserResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody)
++	CheckTestString(t, username, resBody.Email)
++
++	updatedUsername := "jane-doe"
++	payload = "{\"email\": \"" + updatedUsername + "\", \"firstname\": \"Jane\", \"lastname\": \"Doe\", \"password\": \"\", \"role\": " + strconv.Itoa(int(UserRoleSpaceAdmin)) + "}"
++	req = NewHTTPRequest("PUT", "/user/"+userID, loginResponse.UserID, bytes.NewBufferString(payload))
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusNoContent, res.Code)
++
++	req = NewHTTPRequest("GET", "/user/"+userID, loginResponse.UserID, nil)
++	res = ExecuteTestRequest(req)
++	CheckTestResponseCode(t, http.StatusOK, res.Code)
++	var resBody2 *GetUserResponse
++	json.Unmarshal(res.Body.Bytes(), &resBody2)
++	CheckTestString(t, updatedUsername, resBody2.Email)
++}
++
+ func TestPreventSelfDeletion(t *testing.T) {
+ 	ClearTestDB()
+ 	org := CreateTestOrg("test.com")
+diff --git a/server/router/user-router.go b/server/router/user-router.go
+index 0d868b6a..6aaf3f20 100644
+--- a/server/router/user-router.go
++++ b/server/router/user-router.go
+@@ -109,7 +109,7 @@ type SetPasswordRequest struct {
+ }
+ 
+ type InitMergeUsersRequest struct {
+-	Email string `json:"email" validate:"required,email,max=256"`
++	Email string `json:"email" validate:"required,max=256"`
+ }
+ 
+ type GenerateTotpResponse struct {
+@@ -135,6 +135,16 @@ func isValidEmail(email string) bool {
+ 	return err == nil
+ }
+ 
++func isValidUserIdentifier(identifier string, allowPlainUsername bool) bool {
++	if isValidEmail(identifier) {
++		return true
++	}
++	if allowPlainUsername {
++		return ValidateUsername(identifier)
++	}
++	return false
++}
++
+ func (router *UserRouter) SetupRoutes(s *mux.Router) {
+ 	s.HandleFunc("/passkey/", router.listPasskeys).Methods("GET")
+ 	s.HandleFunc("/passkey/registration/begin", router.beginPasskeyRegistration).Methods("POST")
+@@ -424,6 +434,11 @@ func (router *UserRouter) mergeInit(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	source := GetRequestUser(r)
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(source.OrganizationID, SettingAllowPlainUsername.Name)
++	if !isValidUserIdentifier(m.Email, allowPlainUsername) {
++		SendBadRequest(w)
++		return
++	}
+ 	target, err := GetUserRepository().GetByEmail(source.OrganizationID, m.Email)
+ 	if err != nil || target == nil {
+ 		SendNotFound(w)
+@@ -648,11 +663,6 @@ func (router *UserRouter) update(w http.ResponseWriter, r *http.Request) {
+ 		SendBadRequest(w)
+ 		return
+ 	}
+-	if !isServiceAccountRole(m.Role) && !isValidEmail(m.Email) {
+-		SendBadRequest(w)
+-		return
+-	}
+-
+ 	if m.Password != "" && !ValidatePassword(m.Password) {
+ 		SendBadRequest(w)
+ 		return
+@@ -669,6 +679,11 @@ func (router *UserRouter) update(w http.ResponseWriter, r *http.Request) {
+ 		SendForbidden(w)
+ 		return
+ 	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(e.OrganizationID, SettingAllowPlainUsername.Name)
++	if !isServiceAccountRole(m.Role) && !isValidUserIdentifier(m.Email, allowPlainUsername) {
++		SendBadRequest(w)
++		return
++	}
+ 
+ 	if m.AuthProviderID != "" {
+ 		if !ValidateGUID(m.AuthProviderID) {
+@@ -798,18 +813,22 @@ func (router *UserRouter) create(w http.ResponseWriter, r *http.Request) {
+ 		SendBadRequest(w)
+ 		return
+ 	}
+-	if !isServiceAccountRole(m.Role) && !isValidEmail(m.Email) {
+-		SendBadRequest(w)
++	if m.OrganizationID != "" && m.OrganizationID != user.OrganizationID && !GetUserRepository().IsSuperAdmin(user) {
++		SendForbidden(w)
+ 		return
+ 	}
+-
+-	if m.Password != "" && !ValidatePassword(m.Password) {
++	targetOrgID := user.OrganizationID
++	if m.OrganizationID != "" && GetUserRepository().IsSuperAdmin(user) {
++		targetOrgID = m.OrganizationID
++	}
++	allowPlainUsername, _ := GetSettingsRepository().GetBool(targetOrgID, SettingAllowPlainUsername.Name)
++	if !isServiceAccountRole(m.Role) && !isValidUserIdentifier(m.Email, allowPlainUsername) {
+ 		SendBadRequest(w)
+ 		return
+ 	}
+ 
+-	if m.OrganizationID != "" && m.OrganizationID != user.OrganizationID && !GetUserRepository().IsSuperAdmin(user) {
+-		SendForbidden(w)
++	if m.Password != "" && !ValidatePassword(m.Password) {
++		SendBadRequest(w)
+ 		return
+ 	}
+ 
+@@ -818,7 +837,7 @@ func (router *UserRouter) create(w http.ResponseWriter, r *http.Request) {
+ 			SendBadRequest(w)
+ 			return
+ 		}
+-		authProvider, _ := GetAuthProviderRepository().GetOneByOrgId(m.AuthProviderID, user.OrganizationID)
++		authProvider, _ := GetAuthProviderRepository().GetOneByOrgId(m.AuthProviderID, targetOrgID)
+ 		if authProvider == nil {
+ 			SendBadRequest(w)
+ 			return
+diff --git a/server/util/test/validation_test.go b/server/util/test/validation_test.go
+index bb7c1454..8cce27b1 100644
+--- a/server/util/test/validation_test.go
++++ b/server/util/test/validation_test.go
+@@ -38,6 +38,35 @@ func TestInvalidEmails(t *testing.T) {
+ 	}
+ }
+ 
++func TestValidUsernames(t *testing.T) {
++	inputs := []string{
++		"user123",
++		"user.name",
++		"user-name",
++		"user_name",
++		"user+tag",
++		"Jörg",
++		"山田太郎",
++	}
++	for _, input := range inputs {
++		CheckTestBool(t, ValidateUsername(input), true)
++	}
++}
++
++func TestInvalidUsernames(t *testing.T) {
++	inputs := []string{
++		"",
++		" ",
++		"user name",
++		"user@name",
++		"user/name",
++		strings.Repeat("a", 257),
++	}
++	for _, input := range inputs {
++		CheckTestBool(t, ValidateUsername(input), false)
++	}
++}
++
+ func TestValidPasswords(t *testing.T) {
+ 	inputs := []string{
+ 		"Abc!1234",
+diff --git a/server/util/validation.go b/server/util/validation.go
+index bb5a1875..b1f49099 100644
+--- a/server/util/validation.go
++++ b/server/util/validation.go
+@@ -10,6 +10,7 @@ import (
+ 
+ var colorHexRegex = regexp.MustCompile(`^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$`)
+ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
++var usernameRegex = regexp.MustCompile(`^[\p{L}\p{N}._+\-]+$`)
+ var guidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+ var domainRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)+$`)
+ var humanNameRegex = regexp.MustCompile(`^[\p{L}\p{N} \-'.]+$`)
+@@ -23,6 +24,14 @@ func ValidateEmail(s string) bool {
+ 	return emailRegex.MatchString(s)
+ }
+ 
++func ValidateUsername(s string) bool {
++	l := len([]rune(s))
++	if l < 1 || l > 256 {
++		return false
++	}
++	return usernameRegex.MatchString(s)
++}
++
+ func ValidatePassword(s string) bool {
+ 	l := len([]rune(s))
+ 	if l < 8 || l > 64 {
+-- 
+2.54.0
+

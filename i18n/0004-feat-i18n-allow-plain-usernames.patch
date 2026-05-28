@@ -1,0 +1,236 @@
+From 0cfe1efe4bd8633bb86ecfcf0217ccf81b4d41d1 Mon Sep 17 00:00:00 2001
+From: James Nohilly <184946269+jamesnohilly@users.noreply.github.com>
+Date: Wed, 27 May 2026 16:07:13 +0100
+Subject: [PATCH] feat(i18n): add plain username translations
+
+---
+ ui/i18n/translations.de.json    | 5 ++++-
+ ui/i18n/translations.en-GB.json | 5 ++++-
+ ui/i18n/translations.en-US.json | 5 ++++-
+ ui/i18n/translations.es.json    | 5 ++++-
+ ui/i18n/translations.et.json    | 5 ++++-
+ ui/i18n/translations.fi.json    | 5 ++++-
+ ui/i18n/translations.fr.json    | 5 ++++-
+ ui/i18n/translations.he.json    | 5 ++++-
+ ui/i18n/translations.hu.json    | 5 ++++-
+ ui/i18n/translations.it.json    | 5 ++++-
+ ui/i18n/translations.nl.json    | 5 ++++-
+ ui/i18n/translations.pl.json    | 5 ++++-
+ ui/i18n/translations.pt.json    | 5 ++++-
+ ui/i18n/translations.ro.json    | 5 ++++-
+ ui/i18n/translations.zh-TW.json | 5 ++++-
+ 15 files changed, 60 insertions(+), 15 deletions(-)
+
+diff --git a/ui/i18n/translations.de.json b/ui/i18n/translations.de.json
+index 95070ab5..a322a879 100644
+--- a/ui/i18n/translations.de.json
++++ b/ui/i18n/translations.de.json
+@@ -484,5 +484,8 @@
+   "sponsorLink": "Sponsor werden",
+   "shapeRect": "Rechteck",
+   "shapeCircle": "Kreis/Oval",
+-  "featuresLink": "Funktionen vergleichen"
++  "featuresLink": "Funktionen vergleichen",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.en-GB.json b/ui/i18n/translations.en-GB.json
+index ad8a2ec2..c933af03 100644
+--- a/ui/i18n/translations.en-GB.json
++++ b/ui/i18n/translations.en-GB.json
+@@ -481,5 +481,8 @@
+   "featuresLink": "Compare features",
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+-  "shapeCircle": "Circle/Oval"
++  "shapeCircle": "Circle/Oval",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.en-US.json b/ui/i18n/translations.en-US.json
+index 526ce3b4..43a77f15 100644
+--- a/ui/i18n/translations.en-US.json
++++ b/ui/i18n/translations.en-US.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.es.json b/ui/i18n/translations.es.json
+index 989f72a4..514fc60d 100644
+--- a/ui/i18n/translations.es.json
++++ b/ui/i18n/translations.es.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.et.json b/ui/i18n/translations.et.json
+index 3ddb2e93..27f61c4c 100644
+--- a/ui/i18n/translations.et.json
++++ b/ui/i18n/translations.et.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.fi.json b/ui/i18n/translations.fi.json
+index dc44a550..5dbbb541 100644
+--- a/ui/i18n/translations.fi.json
++++ b/ui/i18n/translations.fi.json
+@@ -481,5 +481,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.fr.json b/ui/i18n/translations.fr.json
+index ccbbc40c..97c64cb7 100644
+--- a/ui/i18n/translations.fr.json
++++ b/ui/i18n/translations.fr.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.he.json b/ui/i18n/translations.he.json
+index 17ccc4a3..a4085a6b 100644
+--- a/ui/i18n/translations.he.json
++++ b/ui/i18n/translations.he.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.hu.json b/ui/i18n/translations.hu.json
+index 72d90099..389e24e0 100644
+--- a/ui/i18n/translations.hu.json
++++ b/ui/i18n/translations.hu.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.it.json b/ui/i18n/translations.it.json
+index 348c98cd..589881b7 100644
+--- a/ui/i18n/translations.it.json
++++ b/ui/i18n/translations.it.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.nl.json b/ui/i18n/translations.nl.json
+index ff5616d4..4dd1d762 100644
+--- a/ui/i18n/translations.nl.json
++++ b/ui/i18n/translations.nl.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.pl.json b/ui/i18n/translations.pl.json
+index aae6babc..fe4de677 100644
+--- a/ui/i18n/translations.pl.json
++++ b/ui/i18n/translations.pl.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.pt.json b/ui/i18n/translations.pt.json
+index 50830a08..36db2b36 100644
+--- a/ui/i18n/translations.pt.json
++++ b/ui/i18n/translations.pt.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.ro.json b/ui/i18n/translations.ro.json
+index 60ad126d..f59eda93 100644
+--- a/ui/i18n/translations.ro.json
++++ b/ui/i18n/translations.ro.json
+@@ -483,5 +483,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+diff --git a/ui/i18n/translations.zh-TW.json b/ui/i18n/translations.zh-TW.json
+index db467c1f..cfcb3436 100644
+--- a/ui/i18n/translations.zh-TW.json
++++ b/ui/i18n/translations.zh-TW.json
+@@ -481,5 +481,8 @@
+   "sponsorLink": "Support us as a sponsor",
+   "shapeRect": "Rectangle",
+   "shapeCircle": "Circle/Oval",
+-  "featuresLink": "Compare features"
++  "featuresLink": "Compare features",
++  "allowPlainUsername": "Allow plain usernames",
++  "allowPlainUsernameTooltip": "Let admins create and sign in users with usernames that are not e-mail addresses.",
++  "errorInvalidLogin": "Invalid username or email address."
+ }
+-- 
+2.54.0
+
